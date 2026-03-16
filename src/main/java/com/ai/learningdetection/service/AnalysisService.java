@@ -254,17 +254,27 @@ public class AnalysisService {
     }
 
     private AnalysisDTOs.AnalysisReportResponse toReportResponse(AnalysisReport report) {
+        if (report == null) return null;
         try {
             DocumentSnapshot paperSnap = firestore.collection(PAPERS_COLLECTION).document(report.getPaperId()).get().get();
+            if (!paperSnap.exists()) {
+                return AnalysisDTOs.AnalysisReportResponse.builder()
+                        .reportId(report.getId())
+                        .paperId(report.getPaperId())
+                        .aiComment("Linked paper record missing")
+                        .build();
+            }
+
             String studentId = paperSnap.getString("studentId");
-            DocumentSnapshot studentSnap = firestore.collection(STUDENTS_COLLECTION).document(studentId != null ? studentId : "").get().get();
+            // If studentId is null, use a safe default to avoid NPE in document()
+            DocumentSnapshot studentSnap = firestore.collection(STUDENTS_COLLECTION).document(studentId != null ? studentId : "unknown").get().get();
 
             return AnalysisDTOs.AnalysisReportResponse.builder()
                     .reportId(report.getId())
                     .paperId(report.getPaperId())
                     .studentId(studentId)
-                    .studentName(studentSnap.getString("name"))
-                    .className(studentSnap.getString("className"))
+                    .studentName(studentSnap.exists() ? studentSnap.getString("name") : "Unknown Student")
+                    .className(studentSnap.exists() ? studentSnap.getString("className") : "N/A")
                     .dyslexiaScore(report.getDyslexiaScore())
                     .dysgraphiaScore(report.getDysgraphiaScore())
                     .aiComment(report.getAiComment())
@@ -274,7 +284,8 @@ public class AnalysisService {
                     .originalFileName(paperSnap.getString("originalFileName"))
                     .build();
         } catch (Exception e) {
-            return AnalysisDTOs.AnalysisReportResponse.builder().reportId(report.getId()).build();
+            log.error("Error converting report to response: {}", e.getMessage());
+            return AnalysisDTOs.AnalysisReportResponse.builder().reportId(report.getId()).aiComment("Error loading full report details").build();
         }
     }
 }
