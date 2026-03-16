@@ -26,23 +26,35 @@ public class FirebaseLoginService {
     private static final String PARENTS_COLLECTION = "parents";
 
     public AuthDTOs.AuthResponse loginWithGoogle(String idTokenString, String requestedRole, String fallbackPicture) {
+        if (idTokenString == null || idTokenString.trim().isEmpty()) {
+            log.error("Google Login Failed: Received null or empty ID token");
+            throw new BadCredentialsException("Google ID token is required");
+        }
+
         try {
-            log.info("Starting Firebase ID token verification via Admin SDK...");
+            log.info("Google Login: Starting Firebase ID token verification via Admin SDK...");
             
             // Verify the ID token using Firebase Admin SDK
             FirebaseToken decodedToken = FirebaseAuth.getInstance().verifyIdToken(idTokenString);
             
+            if (decodedToken == null) {
+                log.error("Google Login Failed: verifyIdToken returned null");
+                throw new BadCredentialsException("Firebase verification failed: Result is null");
+            }
+
             String email = decodedToken.getEmail();
             String name = decodedToken.getName();
             String picture = decodedToken.getPicture();
             
+            log.info("Google Login: Verified token for email: {}. Role requested: {}", email, requestedRole);
+
             // Priority: Token Claim > Frontend Fallback
             if (picture == null || picture.trim().isEmpty()) {
                 picture = fallbackPicture;
             }
             
             if (email == null || email.isEmpty()) {
-                log.error("Firebase ID Token is missing email.");
+                log.error("Google Login Failed: Firebase ID Token is missing email.");
                 throw new BadCredentialsException("Firebase account is missing an email address");
             }
             
@@ -50,18 +62,16 @@ public class FirebaseLoginService {
                 name = email.split("@")[0];
             }
 
-            log.info("Starting login process for email: {}", email);
-
             // 1. Check existing
-            log.debug("Checking teachers collection...");
+            log.debug("Google Login: Checking teachers collection for email: {}", email);
             QuerySnapshot teacherQuery = firestore.collection(TEACHERS_COLLECTION).whereEqualTo("email", email).limit(1).get().get();
             if (!teacherQuery.isEmpty()) {
-                log.info("Existing teacher found for email: {}", email);
+                log.info("Google Login: Existing teacher found for email: {}", email);
                 DocumentSnapshot doc = teacherQuery.getDocuments().get(0);
                 Teacher t = doc.toObject(Teacher.class);
                 if (t == null) {
-                    log.error("Failed to map document to Teacher object for ID: {}", doc.getId());
-                    throw new RuntimeException("Data mapping error");
+                    log.error("Google Login Data Error: Failed to map document to Teacher object for ID: {}", doc.getId());
+                    throw new RuntimeException("Data mapping error: Teacher record corrupted");
                 }
                 
                 // Update verified status and picture if needed
@@ -72,15 +82,15 @@ public class FirebaseLoginService {
                 return createResponse(t.getEmail(), "ROLE_TEACHER", t.getId(), t.getName(), t.getPicture());
             }
 
-            log.debug("Checking parents collection...");
+            log.debug("Google Login: Checking parents collection for email: {}", email);
             QuerySnapshot parentQuery = firestore.collection(PARENTS_COLLECTION).whereEqualTo("email", email).limit(1).get().get();
             if (!parentQuery.isEmpty()) {
-                log.info("Existing parent found for email: {}", email);
+                log.info("Google Login: Existing parent found for email: {}", email);
                 DocumentSnapshot doc = parentQuery.getDocuments().get(0);
                 Parent p = doc.toObject(Parent.class);
                 if (p == null) {
-                    log.error("Failed to map document to Parent object for ID: {}", doc.getId());
-                    throw new RuntimeException("Data mapping error");
+                    log.error("Google Login Data Error: Failed to map document to Parent object for ID: {}", doc.getId());
+                    throw new RuntimeException("Data mapping error: Parent record corrupted");
                 }
                 
                 // Update verified status and picture if needed
@@ -92,7 +102,7 @@ public class FirebaseLoginService {
             }
 
             // 2. Create new
-            log.info("Creating new account for email: {} with requested role: {}", email, requestedRole);
+            log.info("Google Login: Creating new account for email: {} with role: {}", email, requestedRole);
             if ("parent".equalsIgnoreCase(requestedRole)) {
                 DocumentReference docRef = firestore.collection(PARENTS_COLLECTION).document();
                 Parent p = Parent.builder()
@@ -105,7 +115,7 @@ public class FirebaseLoginService {
                         .emailVerified(true)
                         .build();
                 docRef.set(p).get();
-                log.info("New parent created with ID: {}", p.getId());
+                log.info("Google Login: New parent created with ID: {}", p.getId());
                 return createResponse(p.getEmail(), "ROLE_PARENT", p.getId(), p.getName(), p.getPicture());
             } else {
                 DocumentReference docRef = firestore.collection(TEACHERS_COLLECTION).document();
@@ -119,22 +129,21 @@ public class FirebaseLoginService {
                         .emailVerified(true)
                         .build();
                 docRef.set(t).get();
-                log.info("New teacher created with ID: {}", t.getId());
+                log.info("Google Login: New teacher created with ID: {}", t.getId());
                 return createResponse(t.getEmail(), "ROLE_TEACHER", t.getId(), t.getName(), t.getPicture());
             }
 
         } catch (InterruptedException | ExecutionException e) {
-            log.error("Firestore error during Google login: {}", e.getMessage(), e);
-            throw new RuntimeException("Internal database error", e);
+            log.error("Google Login Firestore Error: {}", e.getMessage(), e);
+            throw new RuntimeException("Internal database error during Google login", e);
         } catch (com.google.firebase.auth.FirebaseAuthException e) {
-            log.warn("Firebase authentication failed: {}", e.getMessage());
-            throw new BadCredentialsException("Account verification failed: " + e.getMessage());
-        } catch (Throwable e) {
-            log.error("Unexpected error during Google login: {}", e.getMessage(), e);
-            throw new RuntimeException("Google authentication failed due to an unexpected error", e);
+            log.warn("Google Login Verification Error: {}", e.getMessage());
+            throw new BadCredentialsException("Google account verification failed: " + e.getMessage());
+        } catch (Exception e) {
+            log.error("Google Login Unexpected Error: {}", e.getMessage(), e);
+            throw new RuntimeException("Google authentication failed due to an unexpected system error", e);
         }
     }
-
 
     private AuthDTOs.AuthResponse createResponse(String email, String role, String userId, String name, String picture) {
         String token = jwtUtil.generateToken(email, role, userId, name, picture);
