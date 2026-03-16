@@ -1,0 +1,28 @@
+# Build
+target/
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+# IDE
+.idea/
+*.iws
+*.iml
+*.ipr
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Uploads (local only)
+uploads/
+
+# Firebase service account — NEVER commit this
+serviceAccountKey.json
+
+# Maven wrapper
+.mvn/wrapper/maven-wrapper.jar
