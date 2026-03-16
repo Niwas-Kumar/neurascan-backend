@@ -13,9 +13,6 @@ WORKDIR /app
 # Copy the built JAR
 COPY --from=build /app/target/learning-detection-2.0.0.jar app.jar
 
-# Copy Firebase service account key
-COPY src/main/resources/serviceAccountKey.json serviceAccountKey.json
-
 # Create uploads directory
 RUN mkdir -p /app/uploads
 
