@@ -32,7 +32,8 @@ public class FirebaseConfig {
         // Priority 1: Environment variable (for production/cloud deployment)
         if (firebaseServiceAccountBase64 != null && !firebaseServiceAccountBase64.isEmpty()) {
             System.out.println("DEBUG: Loading Firebase credentials from FIREBASE_SERVICE_ACCOUNT_BASE64 env var");
-            byte[] decoded = Base64.getDecoder().decode(firebaseServiceAccountBase64);
+            String cleanBase64 = firebaseServiceAccountBase64.trim().replaceAll("\\s+", "");
+            byte[] decoded = Base64.getDecoder().decode(cleanBase64);
             serviceAccountStream = new ByteArrayInputStream(decoded);
         }
         // Priority 2: Local file (for development)
