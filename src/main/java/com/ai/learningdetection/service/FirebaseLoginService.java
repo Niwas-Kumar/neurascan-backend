@@ -4,19 +4,14 @@ import com.ai.learningdetection.dto.AuthDTOs;
 import com.ai.learningdetection.entity.Parent;
 import com.ai.learningdetection.entity.Teacher;
 import com.ai.learningdetection.util.JwtUtil;
-import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
-import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
-import com.google.api.client.http.javanet.NetHttpTransport;
-import com.google.api.client.json.gson.GsonFactory;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseToken;
 import com.google.cloud.firestore.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.stereotype.Service;
 
-import java.util.Collections;
-import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
 @Service
@@ -27,31 +22,19 @@ public class FirebaseLoginService {
     private final Firestore firestore;
     private final JwtUtil jwtUtil;
 
-    @Value("${google.client-id}")
-    private String googleClientId;
-
     private static final String TEACHERS_COLLECTION = "teachers";
     private static final String PARENTS_COLLECTION = "parents";
 
     public AuthDTOs.AuthResponse loginWithGoogle(String idTokenString, String requestedRole, String fallbackPicture) {
         try {
-            log.info("Starting Google ID token verification via Google API Client...");
+            log.info("Starting Firebase ID token verification via Admin SDK...");
             
-            GoogleIdTokenVerifier verifier = new GoogleIdTokenVerifier.Builder(new NetHttpTransport(), new GsonFactory())
-                    .setAudience(Collections.singletonList(googleClientId))
-                    .build();
-
-            GoogleIdToken idToken = verifier.verify(idTokenString);
+            // Verify the ID token using Firebase Admin SDK
+            FirebaseToken decodedToken = FirebaseAuth.getInstance().verifyIdToken(idTokenString);
             
-            if (idToken == null) {
-                throw new BadCredentialsException("Invalid Google ID Token");
-            }
-            
-            GoogleIdToken.Payload payload = idToken.getPayload();
-
-            String email = payload.getEmail();
-            String name = (String) payload.get("name");
-            String picture = (String) payload.get("picture");
+            String email = decodedToken.getEmail();
+            String name = decodedToken.getName();
+            String picture = decodedToken.getPicture();
             
             // Priority: Token Claim > Frontend Fallback
             if (picture == null || picture.trim().isEmpty()) {
@@ -59,23 +42,15 @@ public class FirebaseLoginService {
             }
             
             if (email == null || email.isEmpty()) {
-                log.error("Google ID Token payload is missing email. Payload: {}", payload);
-                throw new BadCredentialsException("Google account is missing an email address after ID token verification");
+                log.error("Firebase ID Token is missing email.");
+                throw new BadCredentialsException("Firebase account is missing an email address");
             }
             
-            if (name == null || name.strip().isEmpty()) {
-                String givenName = (String) payload.get("given_name");
-                String familyName = (String) payload.get("family_name");
-                if (givenName != null || familyName != null) {
-                    name = (givenName != null ? givenName : "") + " " + (familyName != null ? familyName : "");
-                    name = name.trim();
-                }
-            }
             if (name == null || name.strip().isEmpty()) {
                 name = email.split("@")[0];
             }
 
-            log.info("Starting Google authentication for email: {}", email);
+            log.info("Starting login process for email: {}", email);
 
             // 1. Check existing
             log.debug("Checking teachers collection...");
@@ -92,7 +67,7 @@ public class FirebaseLoginService {
                 // Update verified status and picture if needed
                 if (!t.isEmailVerified() || (picture != null && !picture.equals(t.getPicture()))) {
                     doc.getReference().update("emailVerified", true, "picture", picture).get();
-                    t.setPicture(picture); // Update object for createResponse
+                    t.setPicture(picture); 
                 }
                 return createResponse(t.getEmail(), "ROLE_TEACHER", t.getId(), t.getName(), t.getPicture());
             }
@@ -111,7 +86,7 @@ public class FirebaseLoginService {
                 // Update verified status and picture if needed
                 if (!p.isEmailVerified() || (picture != null && !picture.equals(p.getPicture()))) {
                     doc.getReference().update("emailVerified", true, "picture", picture).get();
-                    p.setPicture(picture); // Update object for createResponse
+                    p.setPicture(picture);
                 }
                 return createResponse(p.getEmail(), "ROLE_PARENT", p.getId(), p.getName(), p.getPicture());
             }
@@ -151,9 +126,9 @@ public class FirebaseLoginService {
         } catch (InterruptedException | ExecutionException e) {
             log.error("Firestore error during Google login: {}", e.getMessage(), e);
             throw new RuntimeException("Internal database error", e);
-        } catch (BadCredentialsException e) {
-            log.warn("Google authentication failed: {}", e.getMessage());
-            throw e;
+        } catch (com.google.firebase.auth.FirebaseAuthException e) {
+            log.warn("Firebase authentication failed: {}", e.getMessage());
+            throw new BadCredentialsException("Account verification failed: " + e.getMessage());
         } catch (Throwable e) {
             log.error("Unexpected error during Google login: {}", e.getMessage(), e);
             throw new RuntimeException("Google authentication failed due to an unexpected error", e);

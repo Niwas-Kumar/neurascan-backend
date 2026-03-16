@@ -2,7 +2,6 @@ package com.ai.learningdetection.service;
 
 import com.ai.learningdetection.dto.AnalysisDTOs;
 import com.ai.learningdetection.entity.AnalysisReport;
-import com.ai.learningdetection.entity.Student;
 import com.ai.learningdetection.entity.TestPaper;
 import com.ai.learningdetection.exception.ResourceNotFoundException;
 import com.ai.learningdetection.exception.UnauthorizedAccessException;

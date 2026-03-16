@@ -47,7 +47,7 @@ public class SecurityConfig {
             )
             .authorizeHttpRequests(auth -> auth
                 // Public auth endpoints
-                .requestMatchers("/api/auth/**").permitAll()
+                .requestMatchers("/api/auth/**", "/auth/**").permitAll()
 
                 // Student management — TEACHER only
                 .requestMatchers(HttpMethod.GET,    "/api/students/**").hasRole("TEACHER")
