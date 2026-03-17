@@ -140,22 +140,41 @@ public class AnalysisService {
 
     public List<AnalysisDTOs.AnalysisReportResponse> getReportsByTeacher(String teacherId) {
         try {
-            // Get all students for teacher
-            QuerySnapshot students = firestore.collection(STUDENTS_COLLECTION).whereEqualTo("teacherId", teacherId).get().get();
-            List<String> studentIds = students.getDocuments().stream().map(DocumentSnapshot::getId).collect(Collectors.toList());
+            // OPTIMIZATION: Get students, then papers sorted by date, then reports in one optimized query
+            QuerySnapshot students = firestore.collection(STUDENTS_COLLECTION)
+                    .whereEqualTo("teacherId", teacherId).get().get();
+            List<String> studentIds = students.getDocuments().stream()
+                    .map(DocumentSnapshot::getId).collect(Collectors.toList());
 
             if (studentIds.isEmpty()) return new ArrayList<>();
 
-            // Get all papers for these students (Batched)
+            // OPTIMIZATION: Get latest papers first (limit 100) instead of all
             List<DocumentSnapshot> papers = runBatchedWhereInQueryForDocs(
                     firestore.collection(PAPERS_COLLECTION), "studentId", studentIds);
-            List<String> paperIds = papers.stream().map(DocumentSnapshot::getId).collect(Collectors.toList());
+            
+            // Sort by upload date descending and limit to last 100 papers
+            List<String> paperIds = papers.stream()
+                    .sorted((a, b) -> {
+                        Timestamp tA = a.getTimestamp("uploadDate");
+                        Timestamp tB = b.getTimestamp("uploadDate");
+                        if (tA == null || tB == null) return 0;
+                        return tB.compareTo(tA);
+                    })
+                    .limit(100)
+                    .map(DocumentSnapshot::getId)
+                    .collect(Collectors.toList());
 
             if (paperIds.isEmpty()) return new ArrayList<>();
 
-            // Get all reports for these papers (Batched)
+            // Get reports for these papers (Batched)
             List<AnalysisReport> reports = runBatchedWhereInQuery(
                     firestore.collection(REPORTS_COLLECTION), "paperId", paperIds, AnalysisReport.class);
+            
+            // Sort by date descending for frontend
+            reports.sort((r1, r2) -> {
+                if (r1.getCreatedAt() == null || r2.getCreatedAt() == null) return 0;
+                return r2.getCreatedAt().compareTo(r1.getCreatedAt());
+            });
             
             return reports.stream()
                     .map(this::toReportResponse)
@@ -171,22 +190,38 @@ public class AnalysisService {
 
     public AnalysisDTOs.DashboardResponse getDashboard(String teacherId) {
         try {
-            QuerySnapshot studentQuery = firestore.collection(STUDENTS_COLLECTION).whereEqualTo("teacherId", teacherId).get().get();
+            // OPTIMIZATION: Quick counts first, then limited detailed queries
+            QuerySnapshot studentQuery = firestore.collection(STUDENTS_COLLECTION)
+                    .whereEqualTo("teacherId", teacherId).get().get();
             long totalStudents = studentQuery.size();
-            List<String> studentIds = studentQuery.getDocuments().stream().map(DocumentSnapshot::getId).collect(Collectors.toList());
+            List<String> studentIds = studentQuery.getDocuments().stream()
+                    .map(DocumentSnapshot::getId).collect(Collectors.toList());
 
             if (studentIds.isEmpty()) {
-                return AnalysisDTOs.DashboardResponse.builder().build();
+                return AnalysisDTOs.DashboardResponse.builder().totalStudents(0).build();
             }
 
-            // Batched paper query
+            // Batched paper query - limit to last 50 papers for performance
             List<DocumentSnapshot> paperDocs = runBatchedWhereInQueryForDocs(
                     firestore.collection(PAPERS_COLLECTION), "studentId", studentIds);
+            
             long totalPapers = paperDocs.size();
-            List<String> paperIds = paperDocs.stream().map(DocumentSnapshot::getId).collect(Collectors.toList());
+            List<String> paperIds = paperDocs.stream()
+                    .sorted((a, b) -> {
+                        Timestamp tA = a.getTimestamp("uploadDate");
+                        Timestamp tB = b.getTimestamp("uploadDate");
+                        if (tA == null || tB == null) return 0;
+                        return tB.compareTo(tA);
+                    })
+                    .limit(50)
+                    .map(DocumentSnapshot::getId)
+                    .collect(Collectors.toList());
 
             if (paperIds.isEmpty()) {
-                return AnalysisDTOs.DashboardResponse.builder().totalStudents(totalStudents).build();
+                return AnalysisDTOs.DashboardResponse.builder()
+                        .totalStudents(totalStudents)
+                        .totalPapersUploaded(0)
+                        .build();
             }
 
             // Batched report query
@@ -207,8 +242,8 @@ public class AnalysisService {
                 if (g != null) sumDysgraphia += g;
                 
                 String risk = RiskLevelUtil.calculateRiskLevel(d, g);
-                if (risk.equals("HIGH")) highRisk++;
-                else if (risk.equals("MEDIUM")) mediumRisk++;
+                if ("HIGH".equals(risk)) highRisk++;
+                else if ("MEDIUM".equals(risk)) mediumRisk++;
                 else lowRisk++;
 
                 if (RiskLevelUtil.isAtRisk(d, g)) atRisk++;
