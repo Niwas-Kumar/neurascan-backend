@@ -26,7 +26,7 @@ public class PasswordResetService {
     private final JavaMailSender mailSender;
     private final PasswordEncoder passwordEncoder;
 
-    @Value("${app.frontend.url:http://localhost:3000}")
+    @Value("${app.frontend.url:https://neurascan-frontend-blond.vercel.app}")
     private String frontendUrl;
 
     private static final String TOKENS_COLLECTION = "reset_tokens";
