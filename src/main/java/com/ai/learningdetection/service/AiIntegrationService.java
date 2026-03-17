@@ -94,4 +94,21 @@ public class AiIntegrationService {
         response.setDyslexia_score(Math.max(0, Math.min(100, response.getDyslexia_score())));
         response.setDysgraphia_score(Math.max(0, Math.min(100, response.getDysgraphia_score())));
     }
+
+    /**
+     * Basic connectivity check to the AI service endpoint.
+     * Returns true if the AI service host is reachable (any status code).
+     */
+    public boolean isServiceReachable() {
+        try {
+            // For a URL intended for POST, a GET/HEAD may return 405 but still indicates network reachability.
+            ResponseEntity<String> response = restTemplate.getForEntity(aiServiceUrl, String.class);
+            log.info("AI service alive response code={}", response.getStatusCode());
+            return true;
+        } catch (Exception ex) {
+            log.warn("AI health check failed for {}: {}", aiServiceUrl, ex.getMessage());
+            return false;
+        }
+    }
 }
+
