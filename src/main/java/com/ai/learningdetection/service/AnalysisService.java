@@ -162,6 +162,7 @@ public class AnalysisService {
             results.addAll(future.get());
         }
         return results;
+    }
 
     // ============================================================
     // TEACHER: Get all reports for teacher's students
