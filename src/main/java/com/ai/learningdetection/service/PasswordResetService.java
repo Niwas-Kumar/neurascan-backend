@@ -155,5 +155,3 @@ public class PasswordResetService {
         }
     }
 }
-
-throw new RuntimeException("Failed to send reset email due to SMTP error: "+e.getMessage(),e);}}}
