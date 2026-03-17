@@ -28,14 +28,34 @@ public class StudentService {
     // -------------------------------------------------------
     // Get all students for a teacher
     // -------------------------------------------------------
-    public List<StudentDTOs.StudentResponse> getStudentsByTeacher(String teacherId) {
+    public List<StudentDTOs.StudentResponse> getStudentsByTeacher(String teacherId, String search, String className, String tag, String rollNumber) {
         try {
-            QuerySnapshot query = firestore.collection(STUDENTS_COLLECTION)
+            Query query = firestore.collection(STUDENTS_COLLECTION)
                     .whereEqualTo("teacherId", teacherId)
-                    .get().get();
+                    .whereEqualTo("isActive", true);
 
-            return query.getDocuments().stream()
+            if (className != null && !className.isBlank()) {
+                query = query.whereEqualTo("className", className);
+            }
+            if (rollNumber != null && !rollNumber.isBlank()) {
+                query = query.whereEqualTo("rollNumber", rollNumber);
+            }
+
+            QuerySnapshot querySnapshot = query.get().get();
+            return querySnapshot.getDocuments().stream()
                     .map(doc -> toResponse(doc.toObject(Student.class)))
+                    .filter(s -> {
+                        if (search == null || search.isBlank()) return true;
+                        String lower = search.toLowerCase();
+                        return (s.getName() != null && s.getName().toLowerCase().contains(lower))
+                                || (s.getRollNumber() != null && s.getRollNumber().toLowerCase().contains(lower))
+                                || (s.getClassName() != null && s.getClassName().toLowerCase().contains(lower))
+                                || (s.getTags() != null && s.getTags().stream().anyMatch(t -> t.toLowerCase().contains(lower)));
+                    })
+                    .filter(s -> {
+                        if (tag == null || tag.isBlank()) return true;
+                        return s.getTags() != null && s.getTags().contains(tag);
+                    })
                     .collect(Collectors.toList());
         } catch (InterruptedException | ExecutionException e) {
             throw new RuntimeException("Firestore error fetching students", e);
@@ -52,17 +72,48 @@ public class StudentService {
                 throw new ResourceNotFoundException("Teacher", "id", teacherId);
             }
 
+            // Enforce roll number uniqueness within school
+            String schoolId = request.getSchoolId();
+            if (schoolId == null || schoolId.isBlank()) {
+                schoolId = teacherSnap.getString("schoolId");
+            }
+
+            if (schoolId == null || schoolId.isBlank()) {
+                throw new RuntimeException("Teacher schoolId is not set");
+            }
+
+            QuerySnapshot existingRoll = firestore.collection(STUDENTS_COLLECTION)
+                    .whereEqualTo("rollNumber", request.getRollNumber())
+                    .whereEqualTo("schoolId", schoolId)
+                    .get().get();
+
+            if (!existingRoll.isEmpty()) {
+                throw new IllegalArgumentException("Roll number already exists in this school");
+            }
+
             DocumentReference docRef = firestore.collection(STUDENTS_COLLECTION).document();
+            String now = java.time.Instant.now().toString();
             Student student = Student.builder()
                     .id(docRef.getId())
+                    .rollNumber(request.getRollNumber())
                     .name(request.getName())
                     .className(request.getClassName())
+                    .section(request.getSection())
                     .age(request.getAge())
+                    .dateOfBirth(request.getDateOfBirth())
+                    .gender(request.getGender())
+                    .schoolId(schoolId)
                     .teacherId(teacherId)
+                    .parentUid(request.getParentUid())
+                    .profilePhotoUrl(request.getProfilePhotoUrl())
+                    .isActive(true)
+                    .tags(request.getTags() == null ? java.util.Collections.emptyList() : request.getTags())
+                    .createdAt(now)
+                    .updatedAt(now)
                     .build();
 
             docRef.set(student).get();
-            log.info("Created student '{}' in Firestore for teacher id={}", student.getName(), teacherId);
+            log.info("Created student '{}' (roll {}) in school {} for teacher id={}", student.getName(), student.getRollNumber(), schoolId, teacherId);
             return toResponse(student);
         } catch (InterruptedException | ExecutionException e) {
             throw new RuntimeException("Firestore error creating student", e);
@@ -84,9 +135,17 @@ public class StudentService {
             }
 
             Student student = snap.toObject(Student.class);
+            student.setRollNumber(request.getRollNumber());
             student.setName(request.getName());
             student.setClassName(request.getClassName());
+            student.setSection(request.getSection());
             student.setAge(request.getAge());
+            student.setDateOfBirth(request.getDateOfBirth());
+            student.setGender(request.getGender());
+            student.setProfilePhotoUrl(request.getProfilePhotoUrl());
+            student.setParentUid(request.getParentUid());
+            student.setTags(request.getTags() == null ? java.util.Collections.emptyList() : request.getTags());
+            student.setUpdatedAt(java.time.Instant.now().toString());
 
             docRef.set(student).get();
             log.info("Updated student id={} in Firestore", studentId);
@@ -160,11 +219,22 @@ public class StudentService {
             // For now, removing redundant logging to slightly improve performance
             return StudentDTOs.StudentResponse.builder()
                     .id(s.getId())
+                    .rollNumber(s.getRollNumber())
                     .name(s.getName())
                     .className(s.getClassName())
+                    .section(s.getSection())
                     .age(s.getAge())
+                    .dateOfBirth(s.getDateOfBirth())
+                    .gender(s.getGender())
+                    .schoolId(s.getSchoolId())
                     .teacherId(s.getTeacherId())
                     .teacherName(teacherName)
+                    .parentUid(s.getParentUid())
+                    .profilePhotoUrl(s.getProfilePhotoUrl())
+                    .isActive(s.isActive())
+                    .tags(s.getTags())
+                    .createdAt(s.getCreatedAt())
+                    .updatedAt(s.getUpdatedAt())
                     .totalPapers(papers.size())
                     .build();
         } catch (InterruptedException | ExecutionException e) {

@@ -14,6 +14,7 @@ public class Parent {
     private String email;
     private String password;
     private String studentId;
+    private String schoolId;
     private String picture;
 
     @Builder.Default

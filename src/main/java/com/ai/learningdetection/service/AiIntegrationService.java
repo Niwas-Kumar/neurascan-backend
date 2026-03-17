@@ -110,5 +110,80 @@ public class AiIntegrationService {
             return false;
         }
     }
+
+    public AnalysisDTOs.AiServiceResponse analyzeFileWithExternalModel(Path filePath) {
+        String externalUrl = aiServiceUrl.replaceAll("/analyze$", "/analyze/external");
+        if (!externalUrl.contains("/analyze/external")) {
+            externalUrl = aiServiceUrl + "/external";
+        }
+
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.MULTIPART_FORM_DATA);
+
+            MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
+            body.add("file", new FileSystemResource(filePath));
+
+            HttpEntity<MultiValueMap<String, Object>> requestEntity = new HttpEntity<>(body, headers);
+
+            ResponseEntity<AnalysisDTOs.AiServiceResponse> response = restTemplate.exchange(
+                    externalUrl,
+                    HttpMethod.POST,
+                    requestEntity,
+                    AnalysisDTOs.AiServiceResponse.class
+            );
+
+            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
+                AnalysisDTOs.AiServiceResponse aiResponse = response.getBody();
+                validateAiResponse(aiResponse);
+                return aiResponse;
+            } else {
+                log.warn("External AI analysis service returned status: {}", response.getStatusCode());
+                return getMockAnalysis();
+            }
+
+        } catch (Exception ex) {
+            log.warn("Failed to call external AI analysis endpoint: {}", ex.getMessage());
+            return getMockAnalysis();
+        }
+    }
+
+    public java.util.Map<String, Object> generateQuizFromText(String topic, String text, int questionCount) {
+        String quizUrl = aiServiceUrl.replaceAll("/analyze$", "/quiz/generate");
+        if (!quizUrl.contains("/quiz/generate")) {
+            quizUrl = aiServiceUrl + "/quiz/generate";
+        }
+
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+
+            java.util.Map<String, Object> body = new java.util.HashMap<>();
+            body.put("topic", topic);
+            body.put("text", text);
+            body.put("question_count", questionCount);
+
+            HttpEntity<java.util.Map<String, Object>> requestEntity =
+                    new HttpEntity<>(body, headers);
+
+            ResponseEntity<java.util.Map> response = restTemplate.postForEntity(
+                    quizUrl,
+                    requestEntity,
+                    java.util.Map.class
+            );
+
+            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
+                return response.getBody();
+            }
+
+            log.warn("Quiz generator service returned non-OK: {}", response.getStatusCode());
+            return java.util.Map.of("questions", java.util.Collections.emptyList());
+
+        } catch (Exception ex) {
+            log.warn("Quiz generation failed, fallback empty quiz: {}", ex.getMessage());
+            return java.util.Map.of("questions", java.util.Collections.emptyList());
+        }
+    }
 }
+
 

@@ -60,6 +60,9 @@ public class SecurityConfig {
                 .requestMatchers("/api/analysis/reports", "/analysis/reports").hasRole("TEACHER")
                 .requestMatchers("/api/analysis/dashboard", "/analysis/dashboard").hasRole("TEACHER")
 
+                // Quiz management — TEACHER only
+                .requestMatchers("/api/quizzes/**", "/quizzes/**").hasRole("TEACHER")
+
                 // Parent report access — PARENT only
                 .requestMatchers("/api/analysis/student-report/**", "/analysis/student-report/**").hasRole("PARENT")
                 .requestMatchers("/api/analysis/progress/**", "/analysis/progress/**").hasRole("PARENT")

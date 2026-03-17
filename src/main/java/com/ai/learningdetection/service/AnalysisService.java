@@ -68,7 +68,8 @@ public class AnalysisService {
             Path filePath = fileStorageService.getFilePath(storedFilename);
             AnalysisDTOs.AiServiceResponse aiResponse;
             try {
-                aiResponse = aiIntegrationService.analyzeFile(filePath);
+                // Prefer advanced external AI service route (may include external model integrations).
+                aiResponse = aiIntegrationService.analyzeFileWithExternalModel(filePath);
             } catch (Exception ex) {
                 log.error("AI service failed, using fallback: {}", ex.getMessage());
                 aiResponse = aiIntegrationService.getMockAnalysis();

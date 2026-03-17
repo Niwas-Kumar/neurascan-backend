@@ -87,6 +87,14 @@ public class AuthDTOs {
     }
 
     @Data
+    public static class ParentLinkRequest {
+        @NotBlank(message = "rollNumber is required")
+        private String rollNumber;
+        @NotBlank(message = "schoolId is required")
+        private String schoolId;
+    }
+
+    @Data
     @lombok.Builder
     @lombok.AllArgsConstructor
     @lombok.NoArgsConstructor

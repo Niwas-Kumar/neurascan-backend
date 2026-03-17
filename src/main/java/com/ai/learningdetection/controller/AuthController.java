@@ -2,12 +2,18 @@ package com.ai.learningdetection.controller;
 
 import com.ai.learningdetection.dto.ApiResponse;
 import com.ai.learningdetection.dto.AuthDTOs;
+import com.ai.learningdetection.security.IdentifiablePrincipal;
 import com.ai.learningdetection.service.AuthService;
 import com.ai.learningdetection.service.FirebaseLoginService;
+import com.google.cloud.firestore.DocumentSnapshot;
+import com.google.cloud.firestore.Firestore;
+import com.google.cloud.firestore.QuerySnapshot;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -18,6 +24,7 @@ public class AuthController {
     private final AuthService authService;
     private final FirebaseLoginService firebaseLoginService;
     private final com.ai.learningdetection.service.EmailVerificationService emailVerificationService;
+    private final Firestore firestore;
 
     // ============================================================
     // TEACHER
@@ -112,4 +119,36 @@ public class AuthController {
             return ResponseEntity.badRequest().body(ApiResponse.error("Invalid or expired OTP"));
         }
     }
+
+    @PostMapping("/parent/link-child")
+    @PreAuthorize("hasRole('PARENT')")
+    public ResponseEntity<ApiResponse<String>> linkParentToStudent(
+            @Valid @RequestBody AuthDTOs.ParentLinkRequest request,
+            @AuthenticationPrincipal IdentifiablePrincipal principal) {
+        // Find student by roll number and schoolId
+        try {
+            QuerySnapshot query = firestore.collection("students")
+                    .whereEqualTo("rollNumber", request.getRollNumber())
+                    .whereEqualTo("schoolId", request.getSchoolId())
+                    .whereEqualTo("isActive", true)
+                    .limit(1)
+                    .get().get();
+
+            if (query.isEmpty()) {
+                return ResponseEntity.badRequest().body(ApiResponse.error("Student roll number not found"));
+            }
+
+            DocumentSnapshot studentDoc = query.getDocuments().get(0);
+            String studentId = studentDoc.getId();
+
+            // assign parent/student connection
+            firestore.collection("parents").document(principal.getId()).update("studentId", studentId).get();
+            firestore.collection("students").document(studentId).update("parentUid", principal.getId()).get();
+
+            return ResponseEntity.ok(ApiResponse.success(studentId, "Parent linked to student"));
+        } catch (Exception ex) {
+            throw new RuntimeException("Failed to link parent with student", ex);
+        }
+    }
 }
+

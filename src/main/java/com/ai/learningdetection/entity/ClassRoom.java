@@ -2,28 +2,23 @@ package com.ai.learningdetection.entity;
 
 import lombok.*;
 
+import java.util.List;
+
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Student {
-
+public class ClassRoom {
     private String id;
-    private String rollNumber;
-    private String name;
     private String className;
     private String section;
-    private Integer age;
-    private String dateOfBirth;
-    private String gender;
+    private String academicYear;
+    private String subject;
     private String schoolId;
     private String teacherId;
-    private String parentUid;
-    private String profilePhotoUrl;
+    private List<String> studentIds;
     private boolean isActive;
-    private java.util.List<String> tags;
     private String createdAt;
     private String updatedAt;
 }
-

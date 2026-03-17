@@ -24,6 +24,7 @@ public class FirebaseLoginService {
 
     private static final String TEACHERS_COLLECTION = "teachers";
     private static final String PARENTS_COLLECTION = "parents";
+    private static final String USERS_COLLECTION = "users";
 
     public AuthDTOs.AuthResponse loginWithGoogle(String idTokenString, String requestedRole, String fallbackPicture) {
         if (idTokenString == null || idTokenString.trim().isEmpty()) {
@@ -111,10 +112,12 @@ public class FirebaseLoginService {
                         .name(name)
                         .password("")
                         .studentId("")
+                        .schoolId("")
                         .picture(picture)
                         .emailVerified(true)
                         .build();
                 docRef.set(p).get();
+                upsertUserProfile(decodedToken.getUid(), email, name, "ROLE_PARENT", "");
                 log.info("Google Login: New parent created with ID: {}", p.getId());
                 return createResponse(p.getEmail(), "ROLE_PARENT", p.getId(), p.getName(), p.getPicture());
             } else {
@@ -125,10 +128,14 @@ public class FirebaseLoginService {
                         .name(name)
                         .password("")
                         .school("Pending Selection")
+                        .schoolId("")
                         .picture(picture)
                         .emailVerified(true)
+                        .createdAt(java.time.Instant.now().toString())
+                        .updatedAt(java.time.Instant.now().toString())
                         .build();
                 docRef.set(t).get();
+                upsertUserProfile(decodedToken.getUid(), email, name, "ROLE_TEACHER", t.getSchoolId());
                 log.info("Google Login: New teacher created with ID: {}", t.getId());
                 return createResponse(t.getEmail(), "ROLE_TEACHER", t.getId(), t.getName(), t.getPicture());
             }
@@ -156,6 +163,23 @@ public class FirebaseLoginService {
                 .picture(picture)
                 .message("Login successful via Google")
                 .build();
+    }
+
+    private void upsertUserProfile(String firebaseUid, String email, String name, String role, String schoolId) {
+        try {
+            DocumentReference userRef = firestore.collection(USERS_COLLECTION).document(firebaseUid);
+            userRef.set(java.util.Map.of(
+                    "uid", firebaseUid,
+                    "email", email,
+                    "name", name,
+                    "role", role,
+                    "schoolId", schoolId == null ? "" : schoolId,
+                    "createdAt", java.time.Instant.now().toString(),
+                    "updatedAt", java.time.Instant.now().toString()
+            ));
+        } catch (Exception e) {
+            log.warn("Failed to upsert user profile in users collection: {}", e.getMessage());
+        }
     }
 
 }

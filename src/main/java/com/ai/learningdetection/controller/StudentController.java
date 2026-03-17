@@ -28,10 +28,14 @@ public class StudentController {
      */
     @GetMapping
     public ResponseEntity<ApiResponse<List<StudentDTOs.StudentResponse>>> getAllStudents(
-            @AuthenticationPrincipal IdentifiablePrincipal principal) {
+            @AuthenticationPrincipal IdentifiablePrincipal principal,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String className,
+            @RequestParam(required = false) String tag,
+            @RequestParam(required = false) String rollNumber) {
 
         List<StudentDTOs.StudentResponse> students =
-                studentService.getStudentsByTeacher(principal.getId());
+                studentService.getStudentsByTeacher(principal.getId(), search, className, tag, rollNumber);
         return ResponseEntity.ok(
                 ApiResponse.success(students, "Students retrieved successfully"));
     }
