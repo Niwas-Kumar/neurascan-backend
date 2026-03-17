@@ -7,6 +7,7 @@ import com.ai.learningdetection.exception.ResourceNotFoundException;
 import com.ai.learningdetection.exception.UnauthorizedAccessException;
 import com.ai.learningdetection.util.RiskLevelUtil;
 import com.google.cloud.firestore.*;
+import com.google.cloud.Timestamp;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
