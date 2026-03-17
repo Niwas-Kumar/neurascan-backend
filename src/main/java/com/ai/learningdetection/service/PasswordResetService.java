@@ -151,6 +151,7 @@ public class PasswordResetService {
                      "  Use this link to reset password for {}:\n" +
                      "  {}\n" +
                      "=======================================================", toEmail, link);
+            throw new RuntimeException("Failed to send reset email", e);
         }
     }
 }

@@ -126,6 +126,7 @@ public class EmailVerificationService {
                      "  Use this OTP to verify email for {}:\n" +
                      "  {}\n" +
                      "=======================================================", toEmail, otp);
+            throw new RuntimeException("Failed to send verification email", e);
         }
     }
 }
