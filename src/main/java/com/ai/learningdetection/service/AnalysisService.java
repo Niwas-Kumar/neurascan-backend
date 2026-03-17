@@ -18,6 +18,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
+import java.util.concurrent.CompletableFuture;
 
 @Service
 @RequiredArgsConstructor
@@ -112,7 +113,7 @@ public class AnalysisService {
 
         // Run all batches in parallel using get().get() for each batch
         // Much faster than sequential: ~1.5s total vs ~5s sequential for 50 items
-        List<java.util.concurrent.CompletableFuture<List<T>>> futures = new ArrayList<>();
+        List<CompletableFuture<List<T>>> futures = new ArrayList<>();
         for (int i = 0; i < values.size(); i += 10) {
             final int startIdx = i;
             futures.add(java.util.concurrent.CompletableFuture.supplyAsync(() -> {
@@ -142,10 +143,10 @@ public class AnalysisService {
         if (values == null || values.isEmpty()) return results;
 
         // Run batches in parallel for speed
-        List<java.util.concurrent.CompletableFuture<List<DocumentSnapshot>>> futures = new ArrayList<>();
+        List<CompletableFuture<List<QueryDocumentSnapshot>>> futures = new ArrayList<>();
         for (int i = 0; i < values.size(); i += 10) {
             final int startIdx = i;
-            futures.add(java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+            futures.add(CompletableFuture.supplyAsync(() -> {
                 try {
                     List<String> batch = values.subList(startIdx, Math.min(startIdx + 10, values.size()));
                     QuerySnapshot query = collection.whereIn(field, batch).get().get();
@@ -157,9 +158,10 @@ public class AnalysisService {
             }));
         }
 
-        // Collect all results
+        // Collect all results (QueryDocumentSnapshot extends DocumentSnapshot)
         for (var future : futures) {
-            results.addAll(future.get());
+            List<QueryDocumentSnapshot> docs = future.get();
+            results.addAll(docs);
         }
         return results;
     }
