@@ -50,19 +50,19 @@ public class SecurityConfig {
                 .requestMatchers("/api/auth/**", "/auth/**").permitAll()
 
                 // Student management — TEACHER only
-                .requestMatchers(HttpMethod.GET,    "/api/students/**").hasRole("TEACHER")
-                .requestMatchers(HttpMethod.POST,   "/api/students/**").hasRole("TEACHER")
-                .requestMatchers(HttpMethod.PUT,    "/api/students/**").hasRole("TEACHER")
-                .requestMatchers(HttpMethod.DELETE, "/api/students/**").hasRole("TEACHER")
+                .requestMatchers(HttpMethod.GET,    "/api/students/**", "/students/**").hasRole("TEACHER")
+                .requestMatchers(HttpMethod.POST,   "/api/students/**", "/students/**").hasRole("TEACHER")
+                .requestMatchers(HttpMethod.PUT,    "/api/students/**", "/students/**").hasRole("TEACHER")
+                .requestMatchers(HttpMethod.DELETE, "/api/students/**", "/students/**").hasRole("TEACHER")
 
                 // Upload & teacher dashboard — TEACHER only
-                .requestMatchers("/api/analysis/upload").hasRole("TEACHER")
-                .requestMatchers("/api/analysis/reports").hasRole("TEACHER")
-                .requestMatchers("/api/analysis/dashboard").hasRole("TEACHER")
+                .requestMatchers("/api/analysis/upload", "/analysis/upload").hasRole("TEACHER")
+                .requestMatchers("/api/analysis/reports", "/analysis/reports").hasRole("TEACHER")
+                .requestMatchers("/api/analysis/dashboard", "/analysis/dashboard").hasRole("TEACHER")
 
                 // Parent report access — PARENT only
-                .requestMatchers("/api/analysis/student-report/**").hasRole("PARENT")
-                .requestMatchers("/api/analysis/progress/**").hasRole("PARENT")
+                .requestMatchers("/api/analysis/student-report/**", "/analysis/student-report/**").hasRole("PARENT")
+                .requestMatchers("/api/analysis/progress/**", "/analysis/progress/**").hasRole("PARENT")
 
                 // Everything else requires authentication
                 .anyRequest().authenticated()

@@ -26,7 +26,7 @@ import java.util.concurrent.ExecutionException;
  * Requires a valid JWT token (sent by the React frontend).
  */
 @RestController
-@RequestMapping("/api/auth")
+@RequestMapping({"/api/auth", "/auth"})
 @RequiredArgsConstructor
 public class ProfileController {
 

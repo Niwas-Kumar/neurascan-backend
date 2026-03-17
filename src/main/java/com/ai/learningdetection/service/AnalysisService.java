@@ -101,6 +101,40 @@ public class AnalysisService {
     }
 
     // ============================================================
+    // Helper: Batched Firestore whereIn Query
+    // ============================================================
+    private <T> List<T> runBatchedWhereInQuery(
+            CollectionReference collection, String field, List<String> values, Class<T> type) 
+            throws InterruptedException, ExecutionException {
+        
+        List<T> results = new ArrayList<>();
+        if (values == null || values.isEmpty()) return results;
+
+        // Firestore whereIn limit is 10
+        for (int i = 0; i < values.size(); i += 10) {
+            List<String> batch = values.subList(i, Math.min(i + 10, values.size()));
+            QuerySnapshot query = collection.whereIn(field, batch).get().get();
+            results.addAll(query.toObjects(type));
+        }
+        return results;
+    }
+
+    private List<DocumentSnapshot> runBatchedWhereInQueryForDocs(
+            CollectionReference collection, String field, List<String> values) 
+            throws InterruptedException, ExecutionException {
+        
+        List<DocumentSnapshot> results = new ArrayList<>();
+        if (values == null || values.isEmpty()) return results;
+
+        for (int i = 0; i < values.size(); i += 10) {
+            List<String> batch = values.subList(i, Math.min(i + 10, values.size()));
+            QuerySnapshot query = collection.whereIn(field, batch).get().get();
+            results.addAll(query.getDocuments());
+        }
+        return results;
+    }
+
+    // ============================================================
     // TEACHER: Get all reports for teacher's students
     // ============================================================
 
@@ -112,17 +146,19 @@ public class AnalysisService {
 
             if (studentIds.isEmpty()) return new ArrayList<>();
 
-            // Get all papers for these students
-            QuerySnapshot papers = firestore.collection(PAPERS_COLLECTION).whereIn("studentId", studentIds).get().get();
-            List<String> paperIds = papers.getDocuments().stream().map(DocumentSnapshot::getId).collect(Collectors.toList());
+            // Get all papers for these students (Batched)
+            List<DocumentSnapshot> papers = runBatchedWhereInQueryForDocs(
+                    firestore.collection(PAPERS_COLLECTION), "studentId", studentIds);
+            List<String> paperIds = papers.stream().map(DocumentSnapshot::getId).collect(Collectors.toList());
 
             if (paperIds.isEmpty()) return new ArrayList<>();
 
-            // Get all reports for these papers
-            QuerySnapshot reports = firestore.collection(REPORTS_COLLECTION).whereIn("paperId", paperIds).get().get();
+            // Get all reports for these papers (Batched)
+            List<AnalysisReport> reports = runBatchedWhereInQuery(
+                    firestore.collection(REPORTS_COLLECTION), "paperId", paperIds, AnalysisReport.class);
             
-            return reports.getDocuments().stream()
-                    .map(doc -> toReportResponse(doc.toObject(AnalysisReport.class)))
+            return reports.stream()
+                    .map(this::toReportResponse)
                     .collect(Collectors.toList());
         } catch (InterruptedException | ExecutionException e) {
             throw new RuntimeException("Firestore error fetching reports", e);
@@ -143,21 +179,25 @@ public class AnalysisService {
                 return AnalysisDTOs.DashboardResponse.builder().build();
             }
 
-            QuerySnapshot paperQuery = firestore.collection(PAPERS_COLLECTION).whereIn("studentId", studentIds).get().get();
-            long totalPapers = paperQuery.size();
-            List<String> paperIds = paperQuery.getDocuments().stream().map(DocumentSnapshot::getId).collect(Collectors.toList());
+            // Batched paper query
+            List<DocumentSnapshot> paperDocs = runBatchedWhereInQueryForDocs(
+                    firestore.collection(PAPERS_COLLECTION), "studentId", studentIds);
+            long totalPapers = paperDocs.size();
+            List<String> paperIds = paperDocs.stream().map(DocumentSnapshot::getId).collect(Collectors.toList());
 
             if (paperIds.isEmpty()) {
                 return AnalysisDTOs.DashboardResponse.builder().totalStudents(totalStudents).build();
             }
 
-            QuerySnapshot reportQuery = firestore.collection(REPORTS_COLLECTION).whereIn("paperId", paperIds).get().get();
+            // Batched report query
+            List<DocumentSnapshot> reportDocs = runBatchedWhereInQueryForDocs(
+                    firestore.collection(REPORTS_COLLECTION), "paperId", paperIds);
             
             double sumDyslexia = 0;
             double sumDysgraphia = 0;
             long atRisk = 0;
 
-            for (DocumentSnapshot doc : reportQuery.getDocuments()) {
+            for (DocumentSnapshot doc : reportDocs) {
                 Double d = doc.getDouble("dyslexiaScore");
                 Double g = doc.getDouble("dysgraphiaScore");
                 if (d != null) sumDyslexia += d;
@@ -165,7 +205,7 @@ public class AnalysisService {
                 if (RiskLevelUtil.isAtRisk(d, g)) atRisk++;
             }
 
-            int count = reportQuery.size();
+            int count = reportDocs.size();
             return AnalysisDTOs.DashboardResponse.builder()
                     .totalStudents(totalStudents)
                     .totalPapersUploaded(totalPapers)
@@ -175,32 +215,6 @@ public class AnalysisService {
                     .build();
         } catch (InterruptedException | ExecutionException e) {
             throw new RuntimeException("Firestore error for dashboard", e);
-        }
-    }
-
-    // ============================================================
-    // PARENT: Get latest report
-    // ============================================================
-
-    public AnalysisDTOs.AnalysisReportResponse getLatestReportForParent(String studentId, String parentId) {
-        try {
-            verifyParentOwnsStudent(parentId, studentId);
-
-            QuerySnapshot papers = firestore.collection(PAPERS_COLLECTION)
-                    .whereEqualTo("studentId", studentId)
-                    .orderBy("uploadDate", Query.Direction.DESCENDING)
-                    .limit(1).get().get();
-
-            if (papers.isEmpty()) throw new ResourceNotFoundException("No papers for student");
-
-            String paperId = papers.getDocuments().get(0).getId();
-            QuerySnapshot reports = firestore.collection(REPORTS_COLLECTION).whereEqualTo("paperId", paperId).limit(1).get().get();
-
-            if (reports.isEmpty()) throw new ResourceNotFoundException("No report for paper");
-
-            return toReportResponse(reports.getDocuments().get(0).toObject(AnalysisReport.class));
-        } catch (InterruptedException | ExecutionException e) {
-            throw new RuntimeException("Firestore error", e);
         }
     }
 
@@ -220,8 +234,17 @@ public class AnalysisService {
                 return AnalysisDTOs.ProgressResponse.builder().studentId(studentId).studentName(student.getString("name")).build();
             }
 
-            QuerySnapshot reports = firestore.collection(REPORTS_COLLECTION).whereIn("paperId", paperIds).orderBy("createdAt", Query.Direction.DESCENDING).get().get();
-            List<AnalysisReport> reportList = reports.toObjects(AnalysisReport.class);
+            // Batched report query - note: orderBy might not work across batched queries easily if we need global sorting
+            // Sorting will be done in-memory after fetching all batches
+            List<AnalysisReport> reportList = runBatchedWhereInQuery(
+                    firestore.collection(REPORTS_COLLECTION), "paperId", paperIds, AnalysisReport.class);
+            
+            // Sort in-memory descending by createdAt
+            reportList.sort((r1, r2) -> {
+                if (r1.getCreatedAt() == null || r2.getCreatedAt() == null) return 0;
+                return r2.getCreatedAt().compareTo(r1.getCreatedAt());
+            });
+
             List<AnalysisDTOs.AnalysisReportResponse> responses = reportList.stream().map(this::toReportResponse).collect(Collectors.toList());
 
             return AnalysisDTOs.ProgressResponse.builder()
@@ -289,4 +312,3 @@ public class AnalysisService {
         }
     }
 }
-

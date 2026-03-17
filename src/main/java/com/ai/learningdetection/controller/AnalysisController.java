@@ -16,7 +16,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/analysis")
+@RequestMapping({"/api/analysis", "/analysis"})
 @RequiredArgsConstructor
 public class AnalysisController {
 

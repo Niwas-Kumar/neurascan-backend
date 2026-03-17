@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/students")
+@RequestMapping({"/api/students", "/students"})
 @RequiredArgsConstructor
 @PreAuthorize("hasRole('TEACHER')")
 public class StudentController {
