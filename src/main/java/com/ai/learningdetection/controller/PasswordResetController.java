@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.*;
  * in SecurityConfig — no changes to SecurityConfig needed.
  */
 @RestController
-@RequestMapping({"/api/auth", "/auth"})
+@RequestMapping({ "/api/auth", "/auth" })
 @RequiredArgsConstructor
 public class PasswordResetController {
 

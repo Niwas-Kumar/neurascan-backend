@@ -17,7 +17,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping({"/api/auth", "/auth"})
+@RequestMapping({ "/api/auth", "/auth" })
 @RequiredArgsConstructor
 public class AuthController {
 
@@ -94,7 +94,8 @@ public class AuthController {
     public ResponseEntity<ApiResponse<AuthDTOs.AuthResponse>> loginWithFirebase(
             @Valid @RequestBody AuthDTOs.FirebaseLoginRequest request) {
 
-        AuthDTOs.AuthResponse response = firebaseLoginService.loginWithGoogle(request.getIdToken(), request.getRole(), request.getPicture());
+        AuthDTOs.AuthResponse response = firebaseLoginService.loginWithGoogle(request.getIdToken(), request.getRole(),
+                request.getPicture());
         return ResponseEntity.ok(ApiResponse.success(response, "Login successful via Google"));
     }
 
@@ -151,4 +152,3 @@ public class AuthController {
         }
     }
 }
-
