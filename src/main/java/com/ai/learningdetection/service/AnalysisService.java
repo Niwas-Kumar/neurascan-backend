@@ -253,6 +253,11 @@ public class AnalysisService {
                     .reports(responses)
                     .trend(calculateTrend(reportList))
                     .build();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new RuntimeException("Firestore error", e);
+        }
+    }
+
     public AnalysisDTOs.AnalysisReportResponse getLatestReportForParent(String studentId, String parentId) {
         try {
             verifyParentOwnsStudent(parentId, studentId);
