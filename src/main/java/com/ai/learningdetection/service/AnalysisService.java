@@ -253,8 +253,33 @@ public class AnalysisService {
                     .reports(responses)
                     .trend(calculateTrend(reportList))
                     .build();
+    public AnalysisDTOs.AnalysisReportResponse getLatestReportForParent(String studentId, String parentId) {
+        try {
+            verifyParentOwnsStudent(parentId, studentId);
+            QuerySnapshot papers = firestore.collection(PAPERS_COLLECTION)
+                    .whereEqualTo("studentId", studentId)
+                    .get().get();
+            
+            List<String> paperIds = papers.getDocuments().stream()
+                    .map(DocumentSnapshot::getId)
+                    .collect(Collectors.toList());
+
+            if (paperIds.isEmpty()) return null;
+
+            List<AnalysisReport> reports = runBatchedWhereInQuery(
+                    firestore.collection(REPORTS_COLLECTION), "paperId", paperIds, AnalysisReport.class);
+
+            if (reports.isEmpty()) return null;
+
+            // Sort by createdAt desc and pick the first
+            reports.sort((r1, r2) -> {
+                if (r1.getCreatedAt() == null || r2.getCreatedAt() == null) return 0;
+                return r2.getCreatedAt().compareTo(r1.getCreatedAt());
+            });
+
+            return toReportResponse(reports.get(0));
         } catch (InterruptedException | ExecutionException e) {
-            throw new RuntimeException("Firestore error", e);
+            throw new RuntimeException("Firestore error fetching latest report", e);
         }
     }
 
