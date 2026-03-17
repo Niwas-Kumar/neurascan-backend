@@ -118,7 +118,7 @@ public class ClassService {
             if (classRoom == null || !teacherId.equals(classRoom.getTeacherId())) {
                 throw new ResourceNotFoundException("Class", "id", classId);
             }
-            classRoom.setIsActive(false);
+            classRoom.setActive(false);
             classRoom.setUpdatedAt(java.time.Instant.now().toString());
             docRef.set(classRoom).get();
         } catch (InterruptedException | ExecutionException e) {
