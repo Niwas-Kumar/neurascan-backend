@@ -196,12 +196,21 @@ public class AnalysisService {
             double sumDyslexia = 0;
             double sumDysgraphia = 0;
             long atRisk = 0;
+            long lowRisk = 0;
+            long mediumRisk = 0;
+            long highRisk = 0;
 
             for (DocumentSnapshot doc : reportDocs) {
                 Double d = doc.getDouble("dyslexiaScore");
                 Double g = doc.getDouble("dysgraphiaScore");
                 if (d != null) sumDyslexia += d;
                 if (g != null) sumDysgraphia += g;
+                
+                String risk = RiskLevelUtil.calculateRiskLevel(d, g);
+                if (risk.equals("HIGH")) highRisk++;
+                else if (risk.equals("MEDIUM")) mediumRisk++;
+                else lowRisk++;
+
                 if (RiskLevelUtil.isAtRisk(d, g)) atRisk++;
             }
 
@@ -210,6 +219,9 @@ public class AnalysisService {
                     .totalStudents(totalStudents)
                     .totalPapersUploaded(totalPapers)
                     .studentsAtRisk(atRisk)
+                    .lowRiskStudents(lowRisk)
+                    .mediumRiskStudents(mediumRisk)
+                    .highRiskStudents(highRisk)
                     .averageDyslexiaScore(count > 0 ? Math.round((sumDyslexia / count) * 100.0) / 100.0 : 0.0)
                     .averageDysgraphiaScore(count > 0 ? Math.round((sumDysgraphia / count) * 100.0) / 100.0 : 0.0)
                     .build();

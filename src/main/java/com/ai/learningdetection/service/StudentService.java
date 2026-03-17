@@ -156,6 +156,8 @@ public class StudentService {
                     .whereEqualTo("studentId", s.getId())
                     .get().get();
 
+            // For future: optimize this by batching paper counts or caching
+            // For now, removing redundant logging to slightly improve performance
             return StudentDTOs.StudentResponse.builder()
                     .id(s.getId())
                     .name(s.getName())
