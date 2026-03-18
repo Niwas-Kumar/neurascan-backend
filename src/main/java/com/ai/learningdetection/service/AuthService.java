@@ -33,12 +33,18 @@ public class AuthService {
 
     public AuthDTOs.AuthResponse registerTeacher(AuthDTOs.TeacherRegisterRequest request) {
         try {
+            log.info("📝 Registering new teacher: {}", request.getEmail());
+            
             if (emailExists(request.getEmail())) {
+                log.warn("❌ Registration failed - email already exists: {}", request.getEmail());
                 throw new EmailAlreadyExistsException(request.getEmail());
             }
 
+            // Verify OTP before creating account
+            log.info("🔐 Verifying OTP for teacher registration: {}", request.getEmail());
             if (!emailVerificationService.consumeOtp(request.getEmail(), request.getOtp())) {
-                throw new BadCredentialsException("Invalid or expired OTP verification code.");
+                log.error("❌ OTP verification failed for teacher registration: {}", request.getEmail());
+                throw new BadCredentialsException("Invalid or expired OTP verification code. Please request a new code.");
             }
 
             DocumentReference docRef = firestore.collection(TEACHERS_COLLECTION).document();
@@ -52,7 +58,7 @@ public class AuthService {
                     .build();
 
             docRef.set(teacher).get();
-            log.info("Registered new teacher in Firestore: {} ({})", teacher.getName(), teacher.getEmail());
+            log.info("✓ Successfully registered new teacher in Firestore: {} ({})", teacher.getName(), teacher.getEmail());
 
             return AuthDTOs.AuthResponse.builder()
                     .jwtToken(null) // Can generate token if auto-login is desired
@@ -62,7 +68,13 @@ public class AuthService {
                     .picture(teacher.getPicture())
                     .message("Registration successful!")
                     .build();
+        } catch (EmailAlreadyExistsException | BadCredentialsException e) {
+            throw e;
         } catch (InterruptedException | ExecutionException e) {
+            log.error("❌ Firestore error during teacher registration: {}", e.getMessage(), e);
+            throw new RuntimeException("Firestore error during registration", e);
+        }
+    }
             throw new RuntimeException("Firestore error during registration", e);
         }
     }
@@ -110,12 +122,18 @@ public class AuthService {
 
     public AuthDTOs.AuthResponse registerParent(AuthDTOs.ParentRegisterRequest request) {
         try {
+            log.info("📝 Registering new parent: {}", request.getEmail());
+            
             if (emailExists(request.getEmail())) {
+                log.warn("❌ Registration failed - email already exists: {}", request.getEmail());
                 throw new EmailAlreadyExistsException(request.getEmail());
             }
 
+            // Verify OTP before creating account
+            log.info("🔐 Verifying OTP for parent registration: {}", request.getEmail());
             if (!emailVerificationService.consumeOtp(request.getEmail(), request.getOtp())) {
-                throw new BadCredentialsException("Invalid or expired OTP verification code.");
+                log.error("❌ OTP verification failed for parent registration: {}", request.getEmail());
+                throw new BadCredentialsException("Invalid or expired OTP verification code. Please request a new code.");
             }
 
             DocumentReference docRef = firestore.collection(PARENTS_COLLECTION).document();
@@ -129,7 +147,7 @@ public class AuthService {
                     .build();
 
             docRef.set(parent).get();
-            log.info("Registered new parent in Firestore: {} ({})", parent.getName(), parent.getEmail());
+            log.info("✓ Successfully registered new parent in Firestore: {} ({})", parent.getName(), parent.getEmail());
 
             return AuthDTOs.AuthResponse.builder()
                     .jwtToken(null) // Can generate token if auto-login is desired
