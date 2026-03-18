@@ -13,6 +13,7 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.stereotype.Service;
 
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.CompletableFuture;
 
 @Service
 @RequiredArgsConstructor
@@ -33,6 +34,7 @@ public class FirebaseLoginService {
         }
 
         try {
+            long loginStartTime = System.currentTimeMillis();
             log.info("Google Login: Starting Firebase ID token verification via Admin SDK...");
             
             // Verify the ID token using Firebase Admin SDK
@@ -63,11 +65,34 @@ public class FirebaseLoginService {
                 name = email.split("@")[0];
             }
 
-            // 1. Check existing
-            log.debug("Google Login: Checking teachers collection for email: {}", email);
-            QuerySnapshot teacherQuery = firestore.collection(TEACHERS_COLLECTION).whereEqualTo("email", email).limit(1).get().get();
-            if (!teacherQuery.isEmpty()) {
-                log.info("Google Login: Existing teacher found for email: {}", email);
+            // OPTIMIZATION: Parallelize teacher and parent lookups instead of sequential
+            long lookupStartTime = System.currentTimeMillis();
+            CompletableFuture<QuerySnapshot> teacherQueryFuture = CompletableFuture.supplyAsync(() -> {
+                try {
+                    return firestore.collection(TEACHERS_COLLECTION).whereEqualTo("email", email).limit(1).get().get();
+                } catch (InterruptedException | ExecutionException e) {
+                    log.error("Teacher query error: {}", e.getMessage());
+                    return null;
+                }
+            });
+
+            CompletableFuture<QuerySnapshot> parentQueryFuture = CompletableFuture.supplyAsync(() -> {
+                try {
+                    return firestore.collection(PARENTS_COLLECTION).whereEqualTo("email", email).limit(1).get().get();
+                } catch (InterruptedException | ExecutionException e) {
+                    log.error("Parent query error: {}", e.getMessage());
+                    return null;
+                }
+            });
+
+            // Wait for both queries to complete
+            QuerySnapshot teacherQuery = teacherQueryFuture.get();
+            QuerySnapshot parentQuery = parentQueryFuture.get();
+            long lookupTime = System.currentTimeMillis() - lookupStartTime;
+
+            // Check teacher
+            if (teacherQuery != null && !teacherQuery.isEmpty()) {
+                log.info("Google Login: Existing teacher found for email: {} (lookup: {}ms)", email, lookupTime);
                 DocumentSnapshot doc = teacherQuery.getDocuments().get(0);
                 Teacher t = doc.toObject(Teacher.class);
                 if (t == null) {
@@ -75,18 +100,19 @@ public class FirebaseLoginService {
                     throw new RuntimeException("Data mapping error: Teacher record corrupted");
                 }
                 
-                // Update verified status and picture if needed
+                // Update verified status and picture if needed (async, don't wait)
                 if (!t.isEmailVerified() || (picture != null && !picture.equals(t.getPicture()))) {
-                    doc.getReference().update("emailVerified", true, "picture", picture).get();
-                    t.setPicture(picture); 
+                    doc.getReference().update("emailVerified", true, "picture", picture);
+                    t.setPicture(picture);
                 }
+                long totalTime = System.currentTimeMillis() - loginStartTime;
+                log.info("Google Login: Teacher login completed in {}ms", totalTime);
                 return createResponse(t.getEmail(), "ROLE_TEACHER", t.getId(), t.getName(), t.getPicture());
             }
 
-            log.debug("Google Login: Checking parents collection for email: {}", email);
-            QuerySnapshot parentQuery = firestore.collection(PARENTS_COLLECTION).whereEqualTo("email", email).limit(1).get().get();
-            if (!parentQuery.isEmpty()) {
-                log.info("Google Login: Existing parent found for email: {}", email);
+            // Check parent
+            if (parentQuery != null && !parentQuery.isEmpty()) {
+                log.info("Google Login: Existing parent found for email: {} (lookup: {}ms)", email, lookupTime);
                 DocumentSnapshot doc = parentQuery.getDocuments().get(0);
                 Parent p = doc.toObject(Parent.class);
                 if (p == null) {
@@ -94,15 +120,18 @@ public class FirebaseLoginService {
                     throw new RuntimeException("Data mapping error: Parent record corrupted");
                 }
                 
-                // Update verified status and picture if needed
+                // Update verified status and picture if needed (async, don't wait)
                 if (!p.isEmailVerified() || (picture != null && !picture.equals(p.getPicture()))) {
-                    doc.getReference().update("emailVerified", true, "picture", picture).get();
+                    doc.getReference().update("emailVerified", true, "picture", picture);
                     p.setPicture(picture);
                 }
+                long totalTime = System.currentTimeMillis() - loginStartTime;
+                log.info("Google Login: Parent login completed in {}ms", totalTime);
                 return createResponse(p.getEmail(), "ROLE_PARENT", p.getId(), p.getName(), p.getPicture());
             }
 
-            // 2. Create new
+            // 2. Create new account
+            long creationStartTime = System.currentTimeMillis();
             log.info("Google Login: Creating new account for email: {} with role: {}", email, requestedRole);
             if ("parent".equalsIgnoreCase(requestedRole)) {
                 DocumentReference docRef = firestore.collection(PARENTS_COLLECTION).document();
@@ -118,7 +147,8 @@ public class FirebaseLoginService {
                         .build();
                 docRef.set(p).get();
                 upsertUserProfile(decodedToken.getUid(), email, name, "ROLE_PARENT", "");
-                log.info("Google Login: New parent created with ID: {}", p.getId());
+                long totalTime = System.currentTimeMillis() - loginStartTime;
+                log.info("Google Login: New parent created with ID: {} (total: {}ms)", p.getId(), totalTime);
                 return createResponse(p.getEmail(), "ROLE_PARENT", p.getId(), p.getName(), p.getPicture());
             } else {
                 DocumentReference docRef = firestore.collection(TEACHERS_COLLECTION).document();
@@ -136,7 +166,8 @@ public class FirebaseLoginService {
                         .build();
                 docRef.set(t).get();
                 upsertUserProfile(decodedToken.getUid(), email, name, "ROLE_TEACHER", t.getSchoolId());
-                log.info("Google Login: New teacher created with ID: {}", t.getId());
+                long totalTime = System.currentTimeMillis() - loginStartTime;
+                log.info("Google Login: New teacher created with ID: {} (total: {}ms)", t.getId(), totalTime);
                 return createResponse(t.getEmail(), "ROLE_TEACHER", t.getId(), t.getName(), t.getPicture());
             }
 
