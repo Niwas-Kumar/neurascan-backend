@@ -243,17 +243,22 @@ public class AnalysisService {
     public AnalysisDTOs.DashboardResponse getDashboard(String teacherId) {
         try {
             long startTime = System.currentTimeMillis();
-            log.info("Starting getDashboard for teacherId: {}", teacherId);
+            log.info("🔍 Starting getDashboard for teacherId: {}", teacherId);
             
             // OPTIMIZATION: Quick counts first, then limited detailed queries
+            // ✅ FIXED: Filter by isActive = true to match StudentService.getStudentsByTeacher
             QuerySnapshot studentQuery = firestore.collection(STUDENTS_COLLECTION)
-                    .whereEqualTo("teacherId", teacherId).get().get();
+                    .whereEqualTo("teacherId", teacherId)
+                    .whereEqualTo("isActive", true)
+                    .get().get();
             long totalStudents = studentQuery.size();
             List<String> studentIds = studentQuery.getDocuments().stream()
                     .map(DocumentSnapshot::getId).collect(Collectors.toList());
 
+            log.info("✅ Dashboard found {} active students for teacher: {}", totalStudents, teacherId);
+            
             if (studentIds.isEmpty()) {
-                log.info("No students found for teacher: {}", teacherId);
+                log.warn("⚠️  No active students found for teacher: {}", teacherId);
                 return AnalysisDTOs.DashboardResponse.builder().totalStudents(0).build();
             }
 

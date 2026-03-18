@@ -9,7 +9,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
@@ -34,6 +34,9 @@ public class StudentService {
     // -------------------------------------------------------
     public List<StudentDTOs.StudentResponse> getStudentsByTeacher(String teacherId, String search, String className, String tag, String rollNumber) {
         try {
+            long startTime = System.currentTimeMillis();
+            log.info("🔍 Starting getStudentsByTeacher for teacherId: {}", teacherId);
+            
             Query query = firestore.collection(STUDENTS_COLLECTION)
                     .whereEqualTo("teacherId", teacherId)
                     .whereEqualTo("isActive", true);
@@ -49,6 +52,13 @@ public class StudentService {
             List<Student> students = querySnapshot.getDocuments().stream()
                     .map(doc -> doc.toObject(Student.class))
                     .collect(Collectors.toList());
+            
+            log.info("✅ Found {} students for teacher: {}", students.size(), teacherId);
+            
+            if (students.isEmpty()) {
+                log.warn("⚠️  No active students found for teacher: {}", teacherId);
+                return new ArrayList<>();
+            }
 
             // OPTIMIZATION #1: Batch fetch all teacher names (1 query per unique teacher)
             Map<String, String> teacherNameCache = batchFetchTeacherNames(students);
@@ -56,7 +66,7 @@ public class StudentService {
             // OPTIMIZATION #2: Batch count papers for all students (1 query per batch of 10 students)
             Map<String, Integer> paperCountCache = batchCountPapers(students);
 
-            return students.stream()
+            List<StudentDTOs.StudentResponse> responses = students.stream()
                     .map(s -> toResponseOptimized(s, teacherNameCache, paperCountCache))
                     .filter(s -> {
                         if (search == null || search.isBlank()) return true;
@@ -71,7 +81,12 @@ public class StudentService {
                         return s.getTags() != null && s.getTags().contains(tag);
                     })
                     .collect(Collectors.toList());
+            
+            long queryTime = System.currentTimeMillis() - startTime;
+            log.info("✅ getStudentsByTeacher completed: {} students returned in {}ms", responses.size(), queryTime);
+            return responses;
         } catch (InterruptedException | ExecutionException e) {
+            log.error("❌ Firestore error fetching students for teacher: {}", teacherId, e);
             throw new RuntimeException("Firestore error fetching students", e);
         }
     }
