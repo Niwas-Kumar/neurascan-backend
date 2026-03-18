@@ -75,11 +75,11 @@ public class StudentService {
             // Enforce roll number uniqueness within school
             String schoolId = request.getSchoolId();
             if (schoolId == null || schoolId.isBlank()) {
-                schoolId = teacherSnap.getString("schoolId");
+                schoolId = teacherSnap.getString("school");
             }
 
             if (schoolId == null || schoolId.isBlank()) {
-                throw new RuntimeException("Teacher schoolId is not set");
+                throw new RuntimeException("Teacher school is not set");
             }
 
             QuerySnapshot existingRoll = firestore.collection(STUDENTS_COLLECTION)
