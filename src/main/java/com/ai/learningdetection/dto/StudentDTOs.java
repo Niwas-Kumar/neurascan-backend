@@ -50,7 +50,8 @@ public class StudentDTOs {
         private String teacherName;
         private String parentUid;
         private String profilePhotoUrl;
-        private boolean isActive;
+        @Builder.Default
+        private boolean isActive = true;  // Default to true
         private java.util.List<String> tags;
         private String createdAt;
         private String updatedAt;

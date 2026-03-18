@@ -19,6 +19,6 @@ public class Teacher {
     private String updatedAt;
     
     @Builder.Default
-    private boolean emailVerified = false;
+    private boolean emailVerified = false;  // Default value for new teachers
 }
 

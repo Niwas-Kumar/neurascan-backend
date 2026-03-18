@@ -18,7 +18,7 @@ public class Parent {
     private String picture;
 
     @Builder.Default
-    private boolean emailVerified = false;
+    private boolean emailVerified = false;  // Default value for new parents
 }
 
 

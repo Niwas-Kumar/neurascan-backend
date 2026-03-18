@@ -18,7 +18,8 @@ public class ClassRoom {
     private String schoolId;
     private String teacherId;
     private List<String> studentIds;
-    private boolean isActive;
+    @Builder.Default
+    private boolean isActive = true;  // Default to true
     private String createdAt;
     private String updatedAt;
 }

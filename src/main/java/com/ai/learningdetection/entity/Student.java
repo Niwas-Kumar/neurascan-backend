@@ -21,7 +21,8 @@ public class Student {
     private String teacherId;
     private String parentUid;
     private String profilePhotoUrl;
-    private boolean isActive;
+    @Builder.Default
+    private boolean isActive = true;  // Default to true for new students
     private java.util.List<String> tags;
     private String createdAt;
     private String updatedAt;
