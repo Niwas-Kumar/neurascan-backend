@@ -45,6 +45,7 @@ public class ProfileController {
         private String name;
 
         private String school; // Optional for parents, used by teachers
+        private String studentId; // Optional for parents to link their child
     }
 
     @Data
@@ -133,6 +134,11 @@ public class ProfileController {
         // If teacher, also update school
         if (teacher && request.getSchool() != null) {
             firestore.collection(collection).document(principal.getId()).update("school", request.getSchool()).get();
+        }
+        
+        // If parent, also update studentId (for linking to child's progress)
+        if (!teacher && request.getStudentId() != null && !request.getStudentId().isEmpty()) {
+            firestore.collection(collection).document(principal.getId()).update("studentId", request.getStudentId()).get();
         }
         
         // Fetch and return the updated profile
