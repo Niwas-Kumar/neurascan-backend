@@ -54,7 +54,7 @@ public class AuthService {
                     .name(request.getName())
                     .email(request.getEmail())
                     .password(passwordEncoder.encode(request.getPassword()))
-                    .school(request.getSchool())
+                    .schoolId(request.getSchool())  // ✅ Map from 'school' request field to 'schoolId' entity field
                     .emailVerified(true)
                     .build();
 

@@ -157,7 +157,6 @@ public class FirebaseLoginService {
                         .email(email)
                         .name(name)
                         .password("")
-                        .school("Pending Selection")
                         .schoolId("")
                         .picture(picture)
                         .emailVerified(true)

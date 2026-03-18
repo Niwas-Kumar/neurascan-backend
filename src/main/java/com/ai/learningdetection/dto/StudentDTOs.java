@@ -1,8 +1,6 @@
 package com.ai.learningdetection.dto;
 
-import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.*;
 import lombok.*;
 
 public class StudentDTOs {
@@ -22,6 +20,7 @@ public class StudentDTOs {
 
         @NotNull(message = "Age is required")
         @Min(value = 1, message = "Age must be at least 1")
+        @Max(value = 100, message = "Age cannot exceed 100")  // ✅ Add upper bound validation
         private Integer age;
 
         private String dateOfBirth;
@@ -55,7 +54,19 @@ public class StudentDTOs {
         private java.util.List<String> tags;
         private String createdAt;
         private String updatedAt;
-        private int totalPapers;
+        
+        @Builder.Default
+        private int totalPapers = 0;  // ✅ Default to 0 instead of null
+        
+        // Provide defaults via a static factory if needed
+        public static StudentResponse emptyResponse(String id, String name) {
+            return StudentResponse.builder()
+                    .id(id)
+                    .name(name)
+                    .teacherName("Unknown")
+                    .totalPapers(0)
+                    .build();
+        }
     }
 }
 

@@ -382,12 +382,22 @@ public class AnalysisService {
                     .map(DocumentSnapshot::getId)
                     .collect(Collectors.toList());
 
-            if (paperIds.isEmpty()) return null;
+            // ✅ Return empty response instead of null (Issue #6)
+            if (paperIds.isEmpty()) return AnalysisDTOs.AnalysisReportResponse.builder()
+                    .studentId(studentId)
+                    .aiComment("No analysis data available yet")
+                    .riskLevel("PENDING")
+                    .build();
 
             List<AnalysisReport> reports = runBatchedWhereInQuery(
                     firestore.collection(REPORTS_COLLECTION), "paperId", paperIds, AnalysisReport.class);
 
-            if (reports.isEmpty()) return null;
+            // ✅ Return empty response instead of null (Issue #6)
+            if (reports.isEmpty()) return AnalysisDTOs.AnalysisReportResponse.builder()
+                    .studentId(studentId)
+                    .aiComment("No analysis reports generated yet")
+                    .riskLevel("PENDING")
+                    .build();
 
             // Sort by createdAt desc and pick the first
             reports.sort((r1, r2) -> {
@@ -420,7 +430,11 @@ public class AnalysisService {
     }
 
     private AnalysisDTOs.AnalysisReportResponse toReportResponse(AnalysisReport report) {
-        if (report == null) return null;
+        // ✅ Return safe empty response instead of null (Issue #6)
+        if (report == null) return AnalysisDTOs.AnalysisReportResponse.builder()
+                .aiComment("Report unavailable")
+                .riskLevel("UNKNOWN")
+                .build();
         try {
             DocumentSnapshot paperSnap = firestore.collection(PAPERS_COLLECTION).document(report.getPaperId()).get().get();
             if (!paperSnap.exists()) {

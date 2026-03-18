@@ -13,8 +13,7 @@ public class Teacher {
     private String name;
     private String email;
     private String password;
-    private String schoolId;
-    private String school;
+    private String schoolId;  // ✅ Single source of truth (removed 'school' field)
     private String picture;
     private String createdAt;
     private String updatedAt;

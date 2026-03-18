@@ -11,6 +11,9 @@ import org.springframework.stereotype.Service;
 
 
 import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
@@ -20,13 +23,14 @@ import java.util.stream.Collectors;
 public class StudentService {
 
     private final Firestore firestore;
+    private final ForeignKeyValidator foreignKeyValidator;  // ✅ Add FK validation
 
     private static final String STUDENTS_COLLECTION = "students";
     private static final String TEACHERS_COLLECTION = "teachers";
     private static final String PAPERS_COLLECTION = "test_papers";
 
     // -------------------------------------------------------
-    // Get all students for a teacher
+    // Get all students for a teacher (OPTIMIZED - batched queries)
     // -------------------------------------------------------
     public List<StudentDTOs.StudentResponse> getStudentsByTeacher(String teacherId, String search, String className, String tag, String rollNumber) {
         try {
@@ -42,8 +46,18 @@ public class StudentService {
             }
 
             QuerySnapshot querySnapshot = query.get().get();
-            return querySnapshot.getDocuments().stream()
-                    .map(doc -> toResponse(doc.toObject(Student.class)))
+            List<Student> students = querySnapshot.getDocuments().stream()
+                    .map(doc -> doc.toObject(Student.class))
+                    .collect(Collectors.toList());
+
+            // OPTIMIZATION #1: Batch fetch all teacher names (1 query per unique teacher)
+            Map<String, String> teacherNameCache = batchFetchTeacherNames(students);
+
+            // OPTIMIZATION #2: Batch count papers for all students (1 query per batch of 10 students)
+            Map<String, Integer> paperCountCache = batchCountPapers(students);
+
+            return students.stream()
+                    .map(s -> toResponseOptimized(s, teacherNameCache, paperCountCache))
                     .filter(s -> {
                         if (search == null || search.isBlank()) return true;
                         String lower = search.toLowerCase();
@@ -63,23 +77,87 @@ public class StudentService {
     }
 
     // -------------------------------------------------------
+    // OPTIMIZATION: Batch fetch teacher names
+    // -------------------------------------------------------
+    private Map<String, String> batchFetchTeacherNames(List<Student> students) throws ExecutionException, InterruptedException {
+        Map<String, String> cache = new HashMap<>();
+        
+        // Get unique teacher IDs
+        Set<String> teacherIds = students.stream()
+                .map(Student::getTeacherId)
+                .collect(Collectors.toSet());
+
+        // Batch fetch all teachers
+        for (String teacherId : teacherIds) {
+            DocumentSnapshot snap = firestore.collection(TEACHERS_COLLECTION).document(teacherId).get().get();
+            String teacherName = snap.exists() ? snap.getString("name") : "Unknown";
+            cache.put(teacherId, teacherName);
+        }
+
+        return cache;
+    }
+
+    // -------------------------------------------------------
+    // OPTIMIZATION: Batch count papers for all students
+    // -------------------------------------------------------
+    private Map<String, Integer> batchCountPapers(List<Student> students) throws ExecutionException, InterruptedException {
+        Map<String, Integer> cache = new HashMap<>();
+        
+        // Firestore in() operator max 10 items, so batch in groups
+        for (int i = 0; i < students.size(); i += 10) {
+            List<String> studentIdBatch = students.stream()
+                    .skip(i)
+                    .limit(10)
+                    .map(Student::getId)
+                    .collect(Collectors.toList());
+
+            QuerySnapshot paperCounts = firestore.collection(PAPERS_COLLECTION)
+                    .whereIn("studentId", studentIdBatch)
+                    .get().get();
+
+            // Count papers per student
+            Map<String, Integer> counts = new HashMap<>();
+            for (Student s : students) {
+                counts.put(s.getId(), 0);
+            }
+
+            for (QueryDocumentSnapshot doc : paperCounts.getDocuments()) {
+                String studentId = doc.getString("studentId");
+                counts.put(studentId, counts.getOrDefault(studentId, 0) + 1);
+            }
+
+            cache.putAll(counts);
+        }
+
+        return cache;
+    }
+
+    // -------------------------------------------------------
     // Create a new student
     // -------------------------------------------------------
     public StudentDTOs.StudentResponse createStudent(StudentDTOs.StudentRequest request, String teacherId) {
         try {
+            // ✅ FK Validation #1: Validate teacher exists
+            foreignKeyValidator.validateTeacherExists(teacherId);
+
             DocumentSnapshot teacherSnap = firestore.collection(TEACHERS_COLLECTION).document(teacherId).get().get();
             if (!teacherSnap.exists()) {
                 throw new ResourceNotFoundException("Teacher", "id", teacherId);
             }
 
+            // ✅ FK Validation #2: Validate parent exists (if provided)
+            if (request.getParentUid() != null && !request.getParentUid().isBlank()) {
+                foreignKeyValidator.validateParentExists(request.getParentUid());
+            }
+
             // Enforce roll number uniqueness within school
             String schoolId = request.getSchoolId();
             if (schoolId == null || schoolId.isBlank()) {
-                schoolId = teacherSnap.getString("school");
+                schoolId = teacherSnap.getString("schoolId");  // ✅ Consistent: use standardized 'schoolId' field
             }
 
             if (schoolId == null || schoolId.isBlank()) {
-                throw new RuntimeException("Teacher school is not set");
+                throw new RuntimeException("Teacher schoolId is not set");
             }
 
             QuerySnapshot existingRoll = firestore.collection(STUDENTS_COLLECTION)
@@ -206,6 +284,41 @@ public class StudentService {
     // -------------------------------------------------------
     // Mapper
     // -------------------------------------------------------
+    // -------------------------------------------------------
+    // Optimized toResponse - uses pre-fetched data (NO QUERIES)
+    // -------------------------------------------------------
+    private StudentDTOs.StudentResponse toResponseOptimized(
+            Student s, 
+            Map<String, String> teacherNameCache, 
+            Map<String, Integer> paperCountCache) {
+        String teacherName = teacherNameCache.getOrDefault(s.getTeacherId(), "Unknown");
+        int totalPapers = paperCountCache.getOrDefault(s.getId(), 0);
+
+        return StudentDTOs.StudentResponse.builder()
+                .id(s.getId())
+                .rollNumber(s.getRollNumber())
+                .name(s.getName())
+                .className(s.getClassName())
+                .section(s.getSection())
+                .age(s.getAge())
+                .dateOfBirth(s.getDateOfBirth())
+                .gender(s.getGender())
+                .schoolId(s.getSchoolId())
+                .teacherId(s.getTeacherId())
+                .teacherName(teacherName)
+                .parentUid(s.getParentUid())
+                .profilePhotoUrl(s.getProfilePhotoUrl())
+                .isActive(s.isActive())
+                .tags(s.getTags())
+                .createdAt(s.getCreatedAt())
+                .updatedAt(s.getUpdatedAt())
+                .totalPapers(totalPapers)
+                .build();
+    }
+
+    // -------------------------------------------------------
+    // Fallback toResponse - used for single student fetch
+    // -------------------------------------------------------
     private StudentDTOs.StudentResponse toResponse(Student s) {
         try {
             DocumentSnapshot teacherSnap = firestore.collection(TEACHERS_COLLECTION).document(s.getTeacherId()).get().get();
@@ -215,8 +328,7 @@ public class StudentService {
                     .whereEqualTo("studentId", s.getId())
                     .get().get();
 
-            // For future: optimize this by batching paper counts or caching
-            // For now, removing redundant logging to slightly improve performance
+            // Fallback: single student fetch is acceptable
             return StudentDTOs.StudentResponse.builder()
                     .id(s.getId())
                     .rollNumber(s.getRollNumber())
@@ -228,18 +340,23 @@ public class StudentService {
                     .gender(s.getGender())
                     .schoolId(s.getSchoolId())
                     .teacherId(s.getTeacherId())
-                    .teacherName(teacherName)
+                    .teacherName(teacherName != null ? teacherName : "Unknown")
                     .parentUid(s.getParentUid())
                     .profilePhotoUrl(s.getProfilePhotoUrl())
                     .isActive(s.isActive())
-                    .tags(s.getTags())
+                    .tags(s.getTags() != null ? s.getTags() : java.util.Collections.emptyList())
                     .createdAt(s.getCreatedAt())
                     .updatedAt(s.getUpdatedAt())
                     .totalPapers(papers.size())
                     .build();
         } catch (InterruptedException | ExecutionException e) {
             log.error("Error building student response: {}", e.getMessage());
-            return StudentDTOs.StudentResponse.builder().id(s.getId()).name(s.getName()).build();
+            return StudentDTOs.StudentResponse.builder()
+                    .id(s.getId())
+                    .name(s.getName())
+                    .teacherName("Unknown")
+                    .totalPapers(0)
+                    .build();
         }
     }
 }
