@@ -13,16 +13,16 @@ public class EmailVerificationToken {
     private String id;
     private String token;
     private String email;
-    private Date expiresAt;
-    private Date expired;  // ✅ Backward compatibility: alternative field name used in older Firestore documents
+    private Date createdAt;
+    private Long expiresAtMillis;  // Timestamp in milliseconds for simplicity
     
     @Builder.Default
     private boolean used = false;
 
-    public boolean isExpired() {
-        // Check both expiresAt and deprecated 'expired' field for backward compatibility
-        Date expirationDate = expiresAt != null ? expiresAt : expired;
-        return expirationDate != null && new Date().after(expirationDate);
+    // Check if token has expired (NOT a getter - use method with clear name)
+    public boolean hasExpired() {
+        if (expiresAtMillis == null) return true;
+        return System.currentTimeMillis() > expiresAtMillis;
     }
 }
 

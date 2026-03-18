@@ -138,10 +138,11 @@ public class AuthController {
         try {
             boolean isValid = otpService.verifyOTP(request.getEmail(), request.getOtp());
             if (isValid) {
-                // ✅ Do NOT consume OTP here - it will be consumed after successful registration
-                // This allows the registration endpoint to verify the same OTP without conflicts
+                // ✅ OTP is verified but NOT consumed - it will be consumed after successful registration
+                log.info("✅ OTP verified: {}", request.getEmail());
                 return ResponseEntity.ok(ApiResponse.success(true, "OTP verified successfully"));
             } else {
+                log.warn("⚠️  OTP verification failed for: {}", request.getEmail());
                 return ResponseEntity.badRequest().body(ApiResponse.error("Invalid or expired OTP"));
             }
         } catch (Exception e) {
