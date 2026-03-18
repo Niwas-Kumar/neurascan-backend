@@ -251,27 +251,38 @@ public class AnalysisService {
                     .whereEqualTo("teacherId", teacherId)
                     .get().get();
             
+            log.info("📊 [DASHBOARD_TOTAL_DOCS] Query returned {} total documents for teacher", studentQuery.size());
+            
             // Filter active students in memory (avoids composite index requirement)
+            // IMPORTANT: Treat missing isActive field as true (new students default to active)
             List<String> studentIds = studentQuery.getDocuments().stream()
                     .filter(doc -> {
                         Boolean isActive = doc.getBoolean("isActive");
-                        return isActive != null && isActive; // Default to false if null for safety
+                        boolean isActiveValue = (isActive == null) ? true : isActive; // Default missing field to true
+                        log.debug("📄 [DASHBOARD_STUDENT_CHECK] Student {} - isActive: {} (from Firestore: {})", 
+                            doc.getId(), isActiveValue, isActive);
+                        return isActiveValue;
                     })
-                    .map(DocumentSnapshot::getId).collect(Collectors.toList());
+                    .map(DocumentSnapshot::getId)
+                    .collect(Collectors.toList());
             
             long totalStudents = studentIds.size();
-            log.info("✅ Dashboard found {} active students for teacher: {}", totalStudents, teacherId);
+            log.info("✅ [DASHBOARD_ACTIVE_STUDENTS] Dashboard found {} active students for teacher: {}", totalStudents, teacherId);
             
             if (studentIds.isEmpty()) {
-                log.warn("⚠️  No active students found for teacher: {}", teacherId);
+                log.warn("⚠️  [DASHBOARD_NO_STUDENTS] No active students found for teacher: {}", teacherId);
                 return AnalysisDTOs.DashboardResponse.builder().totalStudents(0).build();
             }
 
             long paperQueryStartTime = System.currentTimeMillis();
             // Batched paper query - limit to last 50 papers for performance - PARALLEL BATCHES
+            log.info("📚 [DASHBOARD_PAPER_QUERY] Querying papers for {} students", studentIds.size());
             List<DocumentSnapshot> paperDocs = runBatchedWhereInQueryForDocs(
                     firestore.collection(PAPERS_COLLECTION), "studentId", studentIds);
             long paperQueryTime = System.currentTimeMillis() - paperQueryStartTime;
+            
+            log.info("📊 [DASHBOARD_PAPERS_FOUND] Found {} papers for {} students (query time: {}ms)", 
+                paperDocs.size(), studentIds.size(), paperQueryTime);
             
             long totalPapers = paperDocs.size();
             List<String> paperIds = paperDocs.stream()
@@ -286,7 +297,7 @@ public class AnalysisService {
                     .collect(Collectors.toList());
 
             if (paperIds.isEmpty()) {
-                log.info("No papers found for students of teacher: {}", teacherId);
+                log.info("ℹ️  [DASHBOARD_NO_PAPERS] No papers found for students of teacher: {}", teacherId);
                 return AnalysisDTOs.DashboardResponse.builder()
                         .totalStudents(totalStudents)
                         .totalPapersUploaded(0)
@@ -322,10 +333,10 @@ public class AnalysisService {
 
             int count = reportDocs.size();
             long totalTime = System.currentTimeMillis() - startTime;
-            log.info("getDashboard completed: {} papers, {} reports in {}ms (papers: {}ms, reports: {}ms)", 
-                    totalPapers, count, totalTime, paperQueryTime, reportQueryTime);
+            log.info("✅ [DASHBOARD_COMPLETE] Dashboard complete: students={}, papers={}, reports={}, totalTime={}ms (papers_query={}ms, reports_query={}ms)", 
+                    totalStudents, totalPapers, count, totalTime, paperQueryTime, reportQueryTime);
             
-            return AnalysisDTOs.DashboardResponse.builder()
+            AnalysisDTOs.DashboardResponse response = AnalysisDTOs.DashboardResponse.builder()
                     .totalStudents(totalStudents)
                     .totalPapersUploaded(totalPapers)
                     .studentsAtRisk(atRisk)
@@ -335,6 +346,12 @@ public class AnalysisService {
                     .averageDyslexiaScore(count > 0 ? Math.round((sumDyslexia / count) * 100.0) / 100.0 : 0.0)
                     .averageDysgraphiaScore(count > 0 ? Math.round((sumDysgraphia / count) * 100.0) / 100.0 : 0.0)
                     .build();
+            
+            log.debug("📊 [DASHBOARD_RESPONSE] Returning: students={}, papers={}, atRisk={}, lowRisk={}, mediumRisk={}, highRisk={}", 
+                response.getTotalStudents(), response.getTotalPapersUploaded(), response.getStudentsAtRisk(), 
+                response.getLowRiskStudents(), response.getMediumRiskStudents(), response.getHighRiskStudents());
+            
+            return response;
         } catch (InterruptedException | ExecutionException e) {
             log.error("Firestore error for dashboard of teacher: {}", teacherId, e);
             throw new RuntimeException("Firestore error for dashboard", e);
