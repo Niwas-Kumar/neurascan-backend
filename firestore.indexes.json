@@ -1,6 +1,46 @@
 {
   "indexes": [
     {
+      "collectionGroup": "teachers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "email",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "parents",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "email",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "students",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "teacherId",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "test_papers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "studentId",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "test_papers",
       "queryScope": "COLLECTION",
       "fields": [
@@ -21,6 +61,16 @@
         {
           "fieldPath": "paperId",
           "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "analysis_reports",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "paperId",
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "createdAt",
@@ -29,5 +79,56 @@
       ]
     }
   ],
-  "fieldOverrides": []
+  "fieldOverrides": [
+    {
+      "collectionGroup": "teachers",
+      "fieldPath": "email",
+      "indexes": [
+        {
+          "queryScope": "COLLECTION",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "parents",
+      "fieldPath": "email",
+      "indexes": [
+        {
+          "queryScope": "COLLECTION",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "students",
+      "fieldPath": "teacherId",
+      "indexes": [
+        {
+          "queryScope": "COLLECTION",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "test_papers",
+      "fieldPath": "studentId",
+      "indexes": [
+        {
+          "queryScope": "COLLECTION",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "analysis_reports",
+      "fieldPath": "paperId",
+      "indexes": [
+        {
+          "queryScope": "COLLECTION",
+          "order": "ASCENDING"
+        }
+      ]
+    }
+  ]
 }
