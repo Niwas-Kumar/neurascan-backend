@@ -3,6 +3,7 @@ package com.ai.learningdetection.service;
 import com.ai.learningdetection.dto.AnalysisDTOs;
 import com.ai.learningdetection.entity.AnalysisReport;
 import com.ai.learningdetection.entity.TestPaper;
+import com.ai.learningdetection.entity.Student;
 import com.ai.learningdetection.exception.ResourceNotFoundException;
 import com.ai.learningdetection.exception.UnauthorizedAccessException;
 import com.ai.learningdetection.util.RiskLevelUtil;
@@ -17,6 +18,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import java.util.concurrent.CompletableFuture;
@@ -253,17 +255,24 @@ public class AnalysisService {
             
             log.info("📊 [DASHBOARD_TOTAL_DOCS] Query returned {} total documents for teacher", studentQuery.size());
             
-            // Filter active students in memory (avoids composite index requirement)
-            // IMPORTANT: Treat missing isActive field as true (new students default to active)
+            // IMPORTANT: Convert to Student objects first (like StudentService does), 
+            // then filter using the entity's isActive field with @Builder.Default
+            // This ensures consistency with StudentService.getStudentsByTeacher()
             List<String> studentIds = studentQuery.getDocuments().stream()
-                    .filter(doc -> {
-                        Boolean isActive = doc.getBoolean("isActive");
-                        boolean isActiveValue = (isActive == null) ? true : isActive; // Default missing field to true
-                        log.debug("📄 [DASHBOARD_STUDENT_CHECK] Student {} - isActive: {} (from Firestore: {})", 
-                            doc.getId(), isActiveValue, isActive);
-                        return isActiveValue;
+                    .map(doc -> {
+                        try {
+                            Student s = doc.toObject(Student.class);
+                            log.debug("📄 [DASHBOARD_STUDENT_MAPPED] Student {} - name={}, isActive={}", 
+                                s.getId(), s.getName(), s.isActive());
+                            return s;
+                        } catch (Exception e) {
+                            log.error("❌ [DASHBOARD_STUDENT_PARSE_ERROR] Failed to parse student {}: {}", doc.getId(), e.getMessage());
+                            return null;
+                        }
                     })
-                    .map(DocumentSnapshot::getId)
+                    .filter(s -> s != null)              // Remove null entries
+                    .filter(Student::isActive)           // Filter by isActive flag - SAME AS StudentService
+                    .map(Student::getId)
                     .collect(Collectors.toList());
             
             long totalStudents = studentIds.size();
