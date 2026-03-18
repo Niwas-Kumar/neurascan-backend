@@ -46,6 +46,9 @@ public class SecurityConfig {
                 .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
             )
             .authorizeHttpRequests(auth -> auth
+                // Public health check endpoints (for deployment platforms like Render)
+                .requestMatchers("/actuator/health", "/health").permitAll()
+                
                 // Public auth endpoints
                 .requestMatchers("/api/auth/**", "/auth/**").permitAll()
 
