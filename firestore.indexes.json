@@ -1,46 +1,6 @@
 {
   "indexes": [
     {
-      "collectionGroup": "teachers",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "email",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "parents",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "email",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "students",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "teacherId",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "test_papers",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "studentId",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
       "collectionGroup": "test_papers",
       "queryScope": "COLLECTION",
       "fields": [
@@ -51,16 +11,6 @@
         {
           "fieldPath": "uploadDate",
           "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "analysis_reports",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "paperId",
-          "order": "ASCENDING"
         }
       ]
     },
