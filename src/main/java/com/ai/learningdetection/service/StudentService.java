@@ -103,6 +103,11 @@ public class StudentService {
     private Map<String, Integer> batchCountPapers(List<Student> students) throws ExecutionException, InterruptedException {
         Map<String, Integer> cache = new HashMap<>();
         
+        // Initialize all student IDs to 0
+        for (Student s : students) {
+            cache.put(s.getId(), 0);
+        }
+        
         // Firestore in() operator max 10 items, so batch in groups
         for (int i = 0; i < students.size(); i += 10) {
             List<String> studentIdBatch = students.stream()
@@ -115,18 +120,13 @@ public class StudentService {
                     .whereIn("studentId", studentIdBatch)
                     .get().get();
 
-            // Count papers per student
-            Map<String, Integer> counts = new HashMap<>();
-            for (Student s : students) {
-                counts.put(s.getId(), 0);
-            }
-
+            // Count papers per student in this batch
             for (QueryDocumentSnapshot doc : paperCounts.getDocuments()) {
                 String studentId = doc.getString("studentId");
-                counts.put(studentId, counts.getOrDefault(studentId, 0) + 1);
+                if (studentId != null) {
+                    cache.put(studentId, cache.getOrDefault(studentId, 0) + 1);
+                }
             }
-
-            cache.putAll(counts);
         }
 
         return cache;
