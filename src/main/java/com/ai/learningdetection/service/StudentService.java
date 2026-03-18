@@ -153,11 +153,17 @@ public class StudentService {
             // Enforce roll number uniqueness within school
             String schoolId = request.getSchoolId();
             if (schoolId == null || schoolId.isBlank()) {
-                schoolId = teacherSnap.getString("schoolId");  // ✅ Consistent: use standardized 'schoolId' field
+                // Try standardized 'schoolId' field first, fallback to old 'school' field for migration
+                schoolId = teacherSnap.getString("schoolId");
+                if (schoolId == null || schoolId.isBlank()) {
+                    schoolId = teacherSnap.getString("school");  // ✅ Fallback to old field name for backward compatibility
+                }
             }
 
+            // ✅ Allow creation without explicit school assignment (use default if not set)
             if (schoolId == null || schoolId.isBlank()) {
-                throw new RuntimeException("Teacher schoolId is not set");
+                schoolId = "UNASSIGNED";  // Default value - teacher may not have selected school yet
+                log.warn("Teacher {} creating student without school assignment (using default: {})", teacherId, schoolId);
             }
 
             QuerySnapshot existingRoll = firestore.collection(STUDENTS_COLLECTION)
