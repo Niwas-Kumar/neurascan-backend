@@ -35,37 +35,55 @@ public class StudentService {
     public List<StudentDTOs.StudentResponse> getStudentsByTeacher(String teacherId, String search, String className, String tag, String rollNumber) {
         try {
             long startTime = System.currentTimeMillis();
-            log.info("🔍 Starting getStudentsByTeacher for teacherId: {}", teacherId);
+            log.info("🔍 [STUDENTS_START] Getting students for teacherId: {}", teacherId);
             
+            // Step 1: Build query
             Query query = firestore.collection(STUDENTS_COLLECTION)
                     .whereEqualTo("teacherId", teacherId)
                     .whereEqualTo("isActive", true);
+            log.debug("✅ [STUDENTS_QUERY_BUILT] Base query constructed");
 
             if (className != null && !className.isBlank()) {
                 query = query.whereEqualTo("className", className);
+                log.debug("✅ [STUDENTS_FILTER_CLASS] Added className filter: {}", className);
             }
             if (rollNumber != null && !rollNumber.isBlank()) {
                 query = query.whereEqualTo("rollNumber", rollNumber);
+                log.debug("✅ [STUDENTS_FILTER_ROLL] Added rollNumber filter: {}", rollNumber);
             }
 
+            // Step 2: Execute query
+            long queryExecuteStart = System.currentTimeMillis();
             QuerySnapshot querySnapshot = query.get().get();
+            long queryExecuteTime = System.currentTimeMillis() - queryExecuteStart;
+            log.info("✅ [STUDENTS_QUERY_RESULT] Query executed in {}ms, found {} documents", queryExecuteTime, querySnapshot.size());
+            
+            // Step 3: Convert to objects
             List<Student> students = querySnapshot.getDocuments().stream()
-                    .map(doc -> doc.toObject(Student.class))
+                    .map(doc -> {
+                        Student s = doc.toObject(Student.class);
+                        log.debug("📄 [STUDENTS_DOC_MAPPED] Student: id={}, name={}, teacherId={}, isActive={}", 
+                            s.getId(), s.getName(), s.getTeacherId(), s.isActive());
+                        return s;
+                    })
                     .collect(Collectors.toList());
             
-            log.info("✅ Found {} students for teacher: {}", students.size(), teacherId);
+            log.info("✅ [STUDENTS_CONVERTED] Converted {} docs to Student objects", students.size());
             
             if (students.isEmpty()) {
-                log.warn("⚠️  No active students found for teacher: {}", teacherId);
+                log.warn("⚠️  [STUDENTS_EMPTY] No active students found for teacher: {} (filters: class={}, roll={})", 
+                    teacherId, className, rollNumber);
                 return new ArrayList<>();
             }
 
-            // OPTIMIZATION #1: Batch fetch all teacher names (1 query per unique teacher)
+            // Step 4: Batch fetch metadata
+            log.debug("✅ [STUDENTS_FETCH_METADATA] Fetching teacher names and paper counts...");
             Map<String, String> teacherNameCache = batchFetchTeacherNames(students);
-
-            // OPTIMIZATION #2: Batch count papers for all students (1 query per batch of 10 students)
             Map<String, Integer> paperCountCache = batchCountPapers(students);
+            log.debug("✅ [STUDENTS_METADATA_CACHED] Cached {} teacher names and {} paper counts", 
+                teacherNameCache.size(), paperCountCache.size());
 
+            // Step 5: Build responses
             List<StudentDTOs.StudentResponse> responses = students.stream()
                     .map(s -> toResponseOptimized(s, teacherNameCache, paperCountCache))
                     .filter(s -> {
@@ -82,11 +100,12 @@ public class StudentService {
                     })
                     .collect(Collectors.toList());
             
+            log.debug("✅ [STUDENTS_FILTERED] After search/tag filters: {} students", responses.size());
             long queryTime = System.currentTimeMillis() - startTime;
-            log.info("✅ getStudentsByTeacher completed: {} students returned in {}ms", responses.size(), queryTime);
+            log.info("✅ [STUDENTS_COMPLETE] getStudentsByTeacher complete: {} students returned in {}ms", responses.size(), queryTime);
             return responses;
         } catch (InterruptedException | ExecutionException e) {
-            log.error("❌ Firestore error fetching students for teacher: {}", teacherId, e);
+            log.error("❌ [STUDENTS_ERROR] Firestore error fetching students for teacher: {}", teacherId, e);
             throw new RuntimeException("Firestore error fetching students", e);
         }
     }
@@ -212,7 +231,8 @@ public class StudentService {
                     .build();
 
             docRef.set(student).get();
-            log.info("Created student '{}' (roll {}) in school {} for teacher id={}", student.getName(), student.getRollNumber(), schoolId, teacherId);
+            log.info("✅ [STUDENT_CREATED] Created student '{}' (roll {}) in school {} for teacher id={}. Student ID: {}", 
+                student.getName(), student.getRollNumber(), schoolId, teacherId, student.getId());
             return toResponse(student);
         } catch (InterruptedException | ExecutionException e) {
             throw new RuntimeException("Firestore error creating student", e);
