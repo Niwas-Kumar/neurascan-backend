@@ -456,14 +456,18 @@ public class AnalysisService {
         // Get the stored studentId from parent document
         String storedStudentId = p.getString("studentId");
         
-        // ✅ IMPROVED: More helpful error messages for debugging
+        // ✅ IMPROVED: More helpful error messages with logging for debugging
+        System.out.println("[ANALYSIS_DEBUG] Parent: " + parentId + " | Stored Student: " + storedStudentId + " | Requested Student: " + studentId);
+        
         if (storedStudentId == null || storedStudentId.isEmpty()) {
             // Parent hasn't set up their child's student ID yet
-            throw new UnauthorizedAccessException("Student ID not set in your profile. Please go to Settings to add your child's student ID.");
+            System.out.println("[ANALYSIS_ERROR] Parent " + parentId + " has no studentId set in Firestore");
+            throw new UnauthorizedAccessException("STUDENT_ID_NOT_SET|Student ID not set in your profile. Please go to Settings to add your child's student ID.");
         }
         
         if (!studentId.equals(storedStudentId)) {
             // Parent trying to view a different student's data
+            System.out.println("[ANALYSIS_ERROR] Mismatch: requested=" + studentId + " vs stored=" + storedStudentId);
             throw new UnauthorizedAccessException("You do not have permission to view this student's data.");
         }
     }

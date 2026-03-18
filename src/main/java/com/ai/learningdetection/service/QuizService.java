@@ -197,12 +197,16 @@ public class QuizService {
                 }
                 String linkedStudent = parentDoc.getString("studentId");
                 
-                // ✅ IMPROVED: Provide helpful error message if studentId not set
+                // ✅ IMPROVED: Log for debugging, provide helpful error message if studentId not set
+                System.out.println("[QUIZ_DEBUG] Parent: " + requesterId + " | Linked Student in Firestore: " + linkedStudent + " | Requested Student: " + studentId);
+                
                 if (linkedStudent == null || linkedStudent.isEmpty()) {
-                    throw new UnauthorizedAccessException("Student ID not set in your profile. Please go to Settings to add your child's student ID.");
+                    System.out.println("[QUIZ_ERROR] Parent " + requesterId + " has no studentId set in Firestore");
+                    throw new UnauthorizedAccessException("STUDENT_ID_NOT_SET|Student ID not set in your profile. Please go to Settings to add your child's student ID.");
                 }
                 
                 if (!studentId.equals(linkedStudent)) {
+                    System.out.println("[QUIZ_ERROR] Mismatch: requested=" + studentId + " vs stored=" + linkedStudent);
                     throw new UnauthorizedAccessException("You do not have permission to view this student's data.");
                 }
             } else if ("TEACHER".equals(requesterRole)) {
@@ -217,7 +221,8 @@ public class QuizService {
             QuerySnapshot responses = firestore.collection(QUIZ_RESPONSES_COLLECTION)
                     .whereEqualTo("studentId", studentId)
                     .get().get();
-
+            
+            System.out.println("[QUIZ_SUCCESS] Fetched " + responses.size() + " quiz responses for student: " + studentId);
             return responses.getDocuments().stream().map(d -> d.toObject(QuizResponse.class)).collect(Collectors.toList());
 
         } catch (InterruptedException | ExecutionException e) {
