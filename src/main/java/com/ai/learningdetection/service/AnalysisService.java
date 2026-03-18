@@ -245,16 +245,21 @@ public class AnalysisService {
             long startTime = System.currentTimeMillis();
             log.info("🔍 Starting getDashboard for teacherId: {}", teacherId);
             
-            // OPTIMIZATION: Quick counts first, then limited detailed queries
-            // ✅ FIXED: Filter by isActive = true to match StudentService.getStudentsByTeacher
+            // CRITICAL FIX: Use single-field query to avoid composite index delays
+            // Query only by teacherId, filter isActive in memory
             QuerySnapshot studentQuery = firestore.collection(STUDENTS_COLLECTION)
                     .whereEqualTo("teacherId", teacherId)
-                    .whereEqualTo("isActive", true)
                     .get().get();
-            long totalStudents = studentQuery.size();
+            
+            // Filter active students in memory (avoids composite index requirement)
             List<String> studentIds = studentQuery.getDocuments().stream()
+                    .filter(doc -> {
+                        Boolean isActive = doc.getBoolean("isActive");
+                        return isActive != null && isActive; // Default to false if null for safety
+                    })
                     .map(DocumentSnapshot::getId).collect(Collectors.toList());
-
+            
+            long totalStudents = studentIds.size();
             log.info("✅ Dashboard found {} active students for teacher: {}", totalStudents, teacherId);
             
             if (studentIds.isEmpty()) {

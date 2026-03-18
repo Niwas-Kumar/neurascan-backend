@@ -31,34 +31,26 @@ public class StudentService {
 
     // -------------------------------------------------------
     // Get all students for a teacher (OPTIMIZED - batched queries)
+    // NOTE: Uses single-field query to avoid composite index delays
     // -------------------------------------------------------
     public List<StudentDTOs.StudentResponse> getStudentsByTeacher(String teacherId, String search, String className, String tag, String rollNumber) {
         try {
             long startTime = System.currentTimeMillis();
             log.info("🔍 [STUDENTS_START] Getting students for teacherId: {}", teacherId);
             
-            // Step 1: Build query
+            // CRITICAL FIX: Use single-field query (no composite index required)
+            // This avoids Firestore index delays that cause zero results
             Query query = firestore.collection(STUDENTS_COLLECTION)
-                    .whereEqualTo("teacherId", teacherId)
-                    .whereEqualTo("isActive", true);
-            log.debug("✅ [STUDENTS_QUERY_BUILT] Base query constructed");
+                    .whereEqualTo("teacherId", teacherId);
+            log.debug("✅ [STUDENTS_QUERY_BUILT] Base query constructed (single-field query to avoid index delays)");
 
-            if (className != null && !className.isBlank()) {
-                query = query.whereEqualTo("className", className);
-                log.debug("✅ [STUDENTS_FILTER_CLASS] Added className filter: {}", className);
-            }
-            if (rollNumber != null && !rollNumber.isBlank()) {
-                query = query.whereEqualTo("rollNumber", rollNumber);
-                log.debug("✅ [STUDENTS_FILTER_ROLL] Added rollNumber filter: {}", rollNumber);
-            }
-
-            // Step 2: Execute query
+            // Step 2: Execute query (no composite index needed for single field)
             long queryExecuteStart = System.currentTimeMillis();
             QuerySnapshot querySnapshot = query.get().get();
             long queryExecuteTime = System.currentTimeMillis() - queryExecuteStart;
-            log.info("✅ [STUDENTS_QUERY_RESULT] Query executed in {}ms, found {} documents", queryExecuteTime, querySnapshot.size());
+            log.info("✅ [STUDENTS_QUERY_RESULT] Query executed in {}ms, found {} total documents for teacher", queryExecuteTime, querySnapshot.size());
             
-            // Step 3: Convert to objects
+            // Step 3: Convert to objects and filter in-memory (CRITICAL FIX: Filter by isActive in code, not Firestore)
             List<Student> students = querySnapshot.getDocuments().stream()
                     .map(doc -> {
                         Student s = doc.toObject(Student.class);
@@ -66,9 +58,12 @@ public class StudentService {
                             s.getId(), s.getName(), s.getTeacherId(), s.isActive());
                         return s;
                     })
+                    .filter(s -> s.isActive()) // CRITICAL: Filter isActive in memory to avoid composite index
+                    .filter(s -> className == null || className.isBlank() || s.getClassName().equals(className))
+                    .filter(s -> rollNumber == null || rollNumber.isBlank() || s.getRollNumber().equals(rollNumber))
                     .collect(Collectors.toList());
             
-            log.info("✅ [STUDENTS_CONVERTED] Converted {} docs to Student objects", students.size());
+            log.info("✅ [STUDENTS_CONVERTED] Converted {} docs to Student objects, {} active after filtering", querySnapshot.size(), students.size());
             
             if (students.isEmpty()) {
                 log.warn("⚠️  [STUDENTS_EMPTY] No active students found for teacher: {} (filters: class={}, roll={})", 
