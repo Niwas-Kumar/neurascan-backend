@@ -196,8 +196,14 @@ public class QuizService {
                     throw new UnauthorizedAccessException("Parent not found");
                 }
                 String linkedStudent = parentDoc.getString("studentId");
+                
+                // ✅ IMPROVED: Provide helpful error message if studentId not set
+                if (linkedStudent == null || linkedStudent.isEmpty()) {
+                    throw new UnauthorizedAccessException("Student ID not set in your profile. Please go to Settings to add your child's student ID.");
+                }
+                
                 if (!studentId.equals(linkedStudent)) {
-                    throw new UnauthorizedAccessException("Not authorized to access student quiz data");
+                    throw new UnauthorizedAccessException("You do not have permission to view this student's data.");
                 }
             } else if ("TEACHER".equals(requesterRole)) {
                 DocumentSnapshot studentDoc = firestore.collection("students").document(studentId).get().get();
