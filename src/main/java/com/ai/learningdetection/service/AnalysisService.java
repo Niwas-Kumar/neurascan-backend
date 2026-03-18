@@ -449,8 +449,22 @@ public class AnalysisService {
 
     private void verifyParentOwnsStudent(String parentId, String studentId) throws ExecutionException, InterruptedException {
         DocumentSnapshot p = firestore.collection(PARENTS_COLLECTION).document(parentId).get().get();
-        if (!p.exists() || !studentId.equals(p.getString("studentId"))) {
-            throw new UnauthorizedAccessException("Unauthorized");
+        if (!p.exists()) {
+            throw new UnauthorizedAccessException("Parent not found");
+        }
+        
+        // Get the stored studentId from parent document
+        String storedStudentId = p.getString("studentId");
+        
+        // ✅ IMPROVED: More helpful error messages for debugging
+        if (storedStudentId == null || storedStudentId.isEmpty()) {
+            // Parent hasn't set up their child's student ID yet
+            throw new UnauthorizedAccessException("Student ID not set in your profile. Please go to Settings to add your child's student ID.");
+        }
+        
+        if (!studentId.equals(storedStudentId)) {
+            // Parent trying to view a different student's data
+            throw new UnauthorizedAccessException("You do not have permission to view this student's data.");
         }
     }
 
