@@ -79,6 +79,10 @@ public class MailConfig {
 
     /**
      * Real Gmail SMTP configuration (only if credentials provided)
+     * 
+     * Supports both:
+     * - Port 465: Implicit TLS/SSL (stricter but sometimes blocked by hosting)
+     * - Port 587: STARTTLS (more compatible, recommended for cloud/Render)
      */
     @Bean
     @Primary
@@ -89,28 +93,52 @@ public class MailConfig {
     public JavaMailSender javaMailSender() {
         log.info("Configuring Gmail SMTP mail sender for: {}", mailUsername);
         
+        // Try to use port 587 if 465 is specified (better cloud compatibility)
+        Integer effectivePort = mailPort;
+        boolean usePort587 = false;
+        
+        if (mailPort == 465) {
+            // For cloud environments like Render, port 587 is more reliable
+            usePort587 = true;
+            effectivePort = 587;
+            log.info("ℹ️  Using port 587 (STARTTLS) instead of 465 for better cloud compatibility");
+        }
+        
         JavaMailSenderImpl mailSender = new JavaMailSenderImpl();
         mailSender.setHost(mailHost);
-        mailSender.setPort(mailPort);
+        mailSender.setPort(effectivePort);
         mailSender.setUsername(mailUsername);
         mailSender.setPassword(mailPassword);
 
-        // Enable TLS/SSL with proper properties
+        // Configure mail properties
         Properties props = mailSender.getJavaMailProperties();
         props.put("mail.smtp.auth", true);
-        props.put("mail.smtp.starttls.enable", true);
-        props.put("mail.smtp.starttls.required", true);
-        props.put("mail.smtp.ssl.enable", true);
-        props.put("mail.smtp.socketFactory.port", mailPort);
-        props.put("mail.smtp.socketFactory.class", "javax.net.ssl.SSLSocketFactory");
-        props.put("mail.smtp.socketFactory.fallback", false);
         
-        // Improved timeout handling
-        props.put("mail.smtp.connectiontimeout", 15000);   // 15 seconds
-        props.put("mail.smtp.timeout", 15000);             // 15 seconds
-        props.put("mail.smtp.writetimeout", 15000);        // 15 seconds
+        if (usePort587) {
+            // Port 587 uses STARTTLS
+            props.put("mail.smtp.starttls.enable", true);
+            props.put("mail.smtp.starttls.required", true);
+            props.put("mail.smtp.ssl.enable", false);
+            log.info("📧 Using STARTTLS protocol (port 587)");
+        } else {
+            // Port 465 uses implicit TLS
+            props.put("mail.smtp.starttls.enable", true);
+            props.put("mail.smtp.starttls.required", true);
+            props.put("mail.smtp.ssl.enable", true);
+            props.put("mail.smtp.socketFactory.port", effectivePort);
+            props.put("mail.smtp.socketFactory.class", "javax.net.ssl.SSLSocketFactory");
+            props.put("mail.smtp.socketFactory.fallback", false);
+            log.info("🔒 Using implicit TLS protocol (port 465)");
+        }
+        
+        // Improved timeout handling (increased for reliability)
+        props.put("mail.smtp.connectiontimeout", 30000);   // 30 seconds (increased)
+        props.put("mail.smtp.timeout", 30000);             // 30 seconds (increased)
+        props.put("mail.smtp.writetimeout", 30000);        // 30 seconds (increased)
+        props.put("mail.smtp.ehlo", true);
+        props.put("mail.smtp.ssl.protocols", "TLSv1.2");
 
-        log.info("✓ Gmail SMTP configured successfully");
+        log.info("✓ Gmail SMTP configured successfully (host: {}, port: {})", mailHost, effectivePort);
         return mailSender;
     }
 }

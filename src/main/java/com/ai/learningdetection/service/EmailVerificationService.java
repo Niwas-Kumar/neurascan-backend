@@ -34,8 +34,21 @@ public class EmailVerificationService {
     private static final int OTP_EXPIRY_MINUTES = 15;
     private static final int MAX_RETRY_ATTEMPTS = 3;
 
+    // Result wrapper for email sending
+    public static class OtpSendResult {
+        public final boolean otpGenerated;
+        public final boolean emailSent;
+        public final String message;
+        
+        public OtpSendResult(boolean otpGenerated, boolean emailSent, String message) {
+            this.otpGenerated = otpGenerated;
+            this.emailSent = emailSent;
+            this.message = message;
+        }
+    }
+
     // ── Send 6-digit OTP ──────────────────────────────
-    public void sendOtp(String email) {
+    public OtpSendResult sendOtp(String email) {
         try {
             log.info("📧 Initiating OTP send process for: {}", email);
 
@@ -65,7 +78,13 @@ public class EmailVerificationService {
             log.info("✓ OTP token saved to Firestore for: {} (Expires in {} minutes)", email, OTP_EXPIRY_MINUTES);
 
             // Attempt to send email with retry logic
-            sendEmailWithRetry(email, otp, 1);
+            boolean emailSent = sendEmailWithRetry(email, otp, 1);
+            
+            if (emailSent) {
+                return new OtpSendResult(true, true, "OTP sent successfully");
+            } else {
+                return new OtpSendResult(true, false, "OTP generated but email delivery failed. Check Firestore verification_tokens collection");
+            }
             
         } catch (InterruptedException | ExecutionException e) {
             log.error("❌ Firestore error during OTP setup: {}", e.getMessage(), e);
@@ -74,7 +93,7 @@ public class EmailVerificationService {
     }
 
     // ── Send email with retry logic ────────────────────
-    private void sendEmailWithRetry(String email, String otp, int attempt) {
+    private boolean sendEmailWithRetry(String email, String otp, int attempt) {
         try {
             log.info("📤 Attempt {} - Sending verification email to: {}", attempt, email);
             
@@ -94,12 +113,13 @@ public class EmailVerificationService {
                         "└─────────────────────────────────────────────────────┘",
                         email, otp);
                 log.info("✓ OTP stored in Firestore and ready for verification (email service skipped)");
-                return;
+                return true;  // Dev mode - treat as success since OTP is stored
             }
 
             // Send HTML email
             sendHtmlEmail(email, otp);
             log.info("✓ Verification email sent successfully to: {}", email);
+            return true;
             
         } catch (MessagingException | RuntimeException e) {
             log.warn("⚠️  Attempt {} failed to send email: {}", attempt, e.getMessage());
@@ -108,16 +128,17 @@ public class EmailVerificationService {
                 try {
                     // Wait before retry (exponential backoff)
                     Thread.sleep(1000L * attempt);
-                    sendEmailWithRetry(email, otp, attempt + 1);
+                    return sendEmailWithRetry(email, otp, attempt + 1);
                 } catch (InterruptedException ie) {
                     log.error("❌ Retry interrupted: {}", ie.getMessage());
                     Thread.currentThread().interrupt();
-                    throw new RuntimeException("Email send retry interrupted", ie);
+                    return false;
                 }
             } else {
                 log.error("❌ Failed to send email after {} attempts: {}", MAX_RETRY_ATTEMPTS, e.getMessage());
                 // OTP is still stored in Firestore, so verification can proceed
                 log.warn("⚠️  Email delivery failed but OTP is available in Firestore for manual verification (dev mode)");
+                return false;
             }
         }
     }

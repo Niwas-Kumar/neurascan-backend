@@ -4,12 +4,15 @@ import com.ai.learningdetection.dto.ApiResponse;
 import com.ai.learningdetection.dto.AuthDTOs;
 import com.ai.learningdetection.security.IdentifiablePrincipal;
 import com.ai.learningdetection.service.AuthService;
+import com.ai.learningdetection.service.EmailVerificationService;
+import com.ai.learningdetection.service.EmailVerificationService.OtpSendResult;
 import com.ai.learningdetection.service.FirebaseLoginService;
 import com.google.cloud.firestore.DocumentSnapshot;
 import com.google.cloud.firestore.Firestore;
 import com.google.cloud.firestore.QuerySnapshot;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -19,6 +22,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping({ "/api/auth", "/auth" })
 @RequiredArgsConstructor
+@Slf4j
 public class AuthController {
 
     private final AuthService authService;
@@ -106,8 +110,21 @@ public class AuthController {
     @PostMapping("/send-otp")
     public ResponseEntity<ApiResponse<String>> sendOtp(
             @Valid @RequestBody AuthDTOs.SendOtpRequest request) {
-        emailVerificationService.sendOtp(request.getEmail());
-        return ResponseEntity.ok(ApiResponse.success(null, "6-digit OTP sent successfully"));
+        OtpSendResult result = emailVerificationService.sendOtp(request.getEmail());
+        
+        if (result.emailSent) {
+            // Email sent successfully
+            return ResponseEntity.ok(ApiResponse.success(null, "6-digit OTP sent successfully to your email"));
+        } else if (result.otpGenerated) {
+            // OTP generated but email failed (network issue)
+            log.warn("⚠️  OTP generated but email delivery failed for: {}", request.getEmail());
+            return ResponseEntity.status(202).body(ApiResponse.success(null, 
+                "OTP generated but email delivery failed. Please check your internet connection. OTP is available in backup (dev mode)."));
+        } else {
+            // Both OTP generation and email failed
+            return ResponseEntity.status(500).body(ApiResponse.error(
+                "Failed to generate OTP. Please try again later."));
+        }
     }
 
     @PostMapping("/verify-otp")
