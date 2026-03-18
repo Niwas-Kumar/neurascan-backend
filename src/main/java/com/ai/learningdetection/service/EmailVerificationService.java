@@ -5,13 +5,8 @@ import com.google.cloud.firestore.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.mail.SimpleMailMessage;
-import org.springframework.mail.javamail.JavaMailSender;
-import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 
-import jakarta.mail.MessagingException;
-import jakarta.mail.internet.MimeMessage;
 import java.util.Date;
 import java.util.Random;
 import java.util.concurrent.ExecutionException;
@@ -22,9 +17,9 @@ import java.util.concurrent.ExecutionException;
 public class EmailVerificationService {
 
     private final Firestore firestore;
-    private final JavaMailSender mailSender;
+    private final SendGridEmailService emailService;
 
-    @Value("${spring.mail.username:}")
+    @Value("${sendgrid.from.email:hello.neurascan@gmail.com}")
     private String fromEmail;
 
     @Value("${app.frontend.url:http://localhost:3000}")
@@ -97,62 +92,23 @@ public class EmailVerificationService {
         try {
             log.info("📤 Attempt {} - Sending verification email to: {}", attempt, email);
             
-            // Check if SMTP is configured
-            if (fromEmail == null || fromEmail.isEmpty()) {
-                log.warn("\n" +
-                        "┌─────────────────────────────────────────────────────┐\n" +
-                        "│ ⚠️  EMAIL SERVICE NOT CONFIGURED (DEV MODE)          │\n" +
-                        "├─────────────────────────────────────────────────────┤\n" +
-                        "│ Email: {}                    │\n" +
-                        "│ OTP:   {}                         │\n" +
-                        "│ Valid: 15 minutes                              │\n" +
-                        "├─────────────────────────────────────────────────────┤\n" +
-                        "│ For production, set:                          │\n" +
-                        "│ SPRING_MAIL_USERNAME=your-gmail@gmail.com    │\n" +
-                        "│ SPRING_MAIL_PASSWORD=xxxx-xxxx-xxxx-xxxx     │\n" +
-                        "└─────────────────────────────────────────────────────┘",
-                        email, otp);
-                log.info("✓ OTP stored in Firestore and ready for verification (email service skipped)");
-                return true;  // Dev mode - treat as success since OTP is stored
-            }
-
-            // Send HTML email
-            sendHtmlEmail(email, otp);
-            log.info("✓ Verification email sent successfully to: {}", email);
-            return true;
+            // Generate HTML email content
+            String subject = "🧠 NeuraScan — Your Email Verification Code";
+            String htmlContent = generateOtpEmailHtml(otp);
             
-        } catch (MessagingException | RuntimeException e) {
-            log.warn("⚠️  Attempt {} failed to send email: {}", attempt, e.getMessage());
+            // Send via SendGrid
+            return emailService.sendHtmlEmail(email, subject, htmlContent);
             
-            if (attempt < MAX_RETRY_ATTEMPTS) {
-                try {
-                    // Wait before retry (exponential backoff)
-                    Thread.sleep(1000L * attempt);
-                    return sendEmailWithRetry(email, otp, attempt + 1);
-                } catch (InterruptedException ie) {
-                    log.error("❌ Retry interrupted: {}", ie.getMessage());
-                    Thread.currentThread().interrupt();
-                    return false;
-                }
-            } else {
-                log.error("❌ Failed to send email after {} attempts: {}", MAX_RETRY_ATTEMPTS, e.getMessage());
-                // OTP is still stored in Firestore, so verification can proceed
-                log.warn("⚠️  Email delivery failed but OTP is available in Firestore for manual verification (dev mode)");
-                return false;
-            }
+        } catch (RuntimeException e) {
+            log.error("❌ Error sending email: {}", e.getMessage());
+            log.warn("⚠️  Email delivery failed but OTP is available in Firestore for manual verification");
+            return false;
         }
     }
 
-    // ── Send HTML formatted email ────────────────────────
-    private void sendHtmlEmail(String toEmail, String otp) throws MessagingException {
-        MimeMessage message = mailSender.createMimeMessage();
-        MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-
-        helper.setFrom(fromEmail);
-        helper.setTo(toEmail);
-        helper.setSubject("🧠 NeuraScan — Your Email Verification Code");
-        
-        String htmlContent = "" +
+    // ── Generate HTML email content ────────────────────────
+    private String generateOtpEmailHtml(String otp) {
+        return "" +
             "<!DOCTYPE html>\n" +
             "<html>\n" +
             "<head>\n" +
@@ -214,9 +170,6 @@ public class EmailVerificationService {
             "    </div>\n" +
             "</body>\n" +
             "</html>";
-
-        helper.setText(htmlContent, true);
-        mailSender.send(message);
     }
 
     // ── Check if OTP is valid (for frontend step 2) ──
