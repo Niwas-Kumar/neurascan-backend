@@ -21,7 +21,7 @@ import java.util.concurrent.ExecutionException;
 public class PasswordResetService {
 
     private final Firestore firestore;
-    private final SendGridEmailService emailService;
+    private final EmailService emailService;
     private final PasswordEncoder passwordEncoder;
 
     @Value("${app.frontend.url:https://neurascan-frontend-blond.vercel.app}")
@@ -127,77 +127,16 @@ public class PasswordResetService {
 
     // ── Send email ────────────────────────────────────────────
     private void sendResetEmail(String toEmail, String tokenValue) {
-        String link = frontendUrl + "/reset-password?token=" + tokenValue;
+        String resetLink = frontendUrl + "/reset-password?token=" + tokenValue;
         try {
-            String subject = "🧠 NeuraScan — Reset Your Password";
-            String htmlContent = generateResetEmailHtml(link, toEmail);
-            
-            boolean emailSent = emailService.sendHtmlEmail(toEmail, subject, htmlContent);
-            
+            boolean emailSent = emailService.sendPasswordResetEmail(toEmail, resetLink);
             if (emailSent) {
-                log.info("Reset email sent to: {}", toEmail);
+                log.info("✅ Reset email sent to: {}", toEmail);
             } else {
-                log.warn("Reset email failed for: {} (but token saved, user can retry)", toEmail);
+                log.warn("⚠️  Reset email failed for: {}", toEmail);
             }
         } catch (Exception e) {
-            log.error("Error in password reset email process: {}", e.getMessage());
-            log.warn("Password reset email could not be delivered via SendGrid for: {}", toEmail);
+            log.error("❌ Error sending reset email: {}", e.getMessage());
         }
-    }
-
-    // ── Generate HTML email content ────────────────────────
-    private String generateResetEmailHtml(String resetLink, String email) {
-        return "" +
-            "<!DOCTYPE html>\n" +
-            "<html>\n" +
-            "<head>\n" +
-            "    <meta charset=\"UTF-8\">\n" +
-            "    <style>\n" +
-            "        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; }\n" +
-            "        .container { max-width: 600px; margin: 40px auto; background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); overflow: hidden; }\n" +
-            "        .header { background: linear-gradient(135deg, #d93025 0%, #f57c00 100%); color: white; padding: 40px 20px; text-align: center; }\n" +
-            "        .header h1 { margin: 0; font-size: 28px; font-weight: 700; }\n" +
-            "        .header p { margin: 8px 0 0 0; opacity: 0.9; font-size: 14px; }\n" +
-            "        .content { padding: 40px 30px; }\n" +
-            "        .greeting { font-size: 16px; color: #202124; margin-bottom: 20px; }\n" +
-            "        .button-box { text-align: center; margin: 30px 0; }\n" +
-            "        .reset-button { background: linear-gradient(135deg, #d93025 0%, #f57c00 100%); color: white; padding: 14px 40px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block; }\n" +
-            "        .reset-button:hover { opacity: 0.9; }\n" +
-            "        .info-box { background: #e8f0fe; border-left: 4px solid #d93025; padding: 16px; margin: 20px 0; border-radius: 4px; }\n" +
-            "        .info-box p { margin: 0; font-size: 13px; color: #d93025; }\n" +
-            "        .warning { background: #fce5e5; border-left: 4px solid #d93025; padding: 16px; margin: 20px 0; border-radius: 4px; }\n" +
-            "        .warning p { margin: 0; font-size: 13px; color: #d93025; }\n" +
-            "        .footer { background: #f8f9fa; padding: 20px; text-align: center; border-top: 1px solid #e8eaed; font-size: 12px; color: #80868b; }\n" +
-            "    </style>\n" +
-            "</head>\n" +
-            "<body>\n" +
-            "    <div class=\"container\">\n" +
-            "        <div class=\"header\">\n" +
-            "            <h1>🧠 NeuraScan</h1>\n" +
-            "            <p>Password Reset Request</p>\n" +
-            "        </div>\n" +
-            "\n" +
-            "        <div class=\"content\">\n" +
-            "            <p class=\"greeting\">Hello,</p>\n" +
-            "\n" +
-            "            <p>We received a request to reset the password for your NeuraScan account associated with this email address.</p>\n" +
-            "\n" +
-            "            <div class=\"button-box\">\n" +
-            "                <a href=\"" + resetLink + "\" class=\"reset-button\">Reset Password</a>\n" +
-            "            </div>\n" +
-            "\n" +
-            "            <p style=\"color: #80868b; font-size: 13px; text-align: center;\">This link expires in 1 hour</p>\n" +
-            "\n" +
-            "            <div class=\"warning\">\n" +
-            "                <p><strong>🔒 Security:</strong> If you didn't request this, ignore this email and your account will remain secure.</p>\n" +
-            "            </div>\n" +
-            "        </div>\n" +
-            "\n" +
-            "        <div class=\"footer\">\n" +
-            "            <p>© 2026 NeuraScan. All rights reserved.</p>\n" +
-            "        </div>\n" +
-            "    </div>\n" +
-            "</body>\n" +
-            "</html>";
     }
 }

@@ -1,0 +1,180 @@
+package com.ai.learningdetection.service;
+
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.*;
+
+@Service
+@Slf4j
+public class EmailService {
+
+    private final RestTemplate restTemplate;
+    private final ObjectMapper objectMapper;
+
+    @Value("${sendgrid.api.key}")
+    private String apiKey;
+
+    @Value("${sendgrid.from.email}")
+    private String fromEmail;
+
+    public EmailService(RestTemplate restTemplate, ObjectMapper objectMapper) {
+        this.restTemplate = restTemplate;
+        this.objectMapper = objectMapper;
+    }
+
+    /**
+     * Send OTP email via SendGrid
+     */
+    public boolean sendOtpEmail(String toEmail, String otp) {
+        String subject = "🧠 NeuraScan — Your Email Verification Code";
+        String htmlContent = generateOtpHtml(otp);
+        return sendEmail(toEmail, subject, htmlContent);
+    }
+
+    /**
+     * Send password reset email via SendGrid
+     */
+    public boolean sendPasswordResetEmail(String toEmail, String resetLink) {
+        String subject = "🧠 NeuraScan — Reset Your Password";
+        String htmlContent = generatePasswordResetHtml(resetLink);
+        return sendEmail(toEmail, subject, htmlContent);
+    }
+
+    /**
+     * Generic email send method
+     */
+    private boolean sendEmail(String toEmail, String subject, String htmlContent) {
+        try {
+            log.info("📧 Sending email to: {}", toEmail);
+
+            // Build SendGrid request
+            Map<String, Object> request = buildSendGridRequest(toEmail, subject, htmlContent);
+            String payload = objectMapper.writeValueAsString(request);
+
+            // Setup headers
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.set("Authorization", "Bearer " + apiKey);
+
+            // Send request
+            HttpEntity<String> entity = new HttpEntity<>(payload, headers);
+            restTemplate.postForObject("https://api.sendgrid.com/v3/mail/send", entity, String.class);
+
+            log.info("✅ Email sent successfully to: {}", toEmail);
+            return true;
+
+        } catch (Exception e) {
+            log.error("❌ Email send failed: {}", e.getMessage());
+            if (e.getMessage().contains("403")) {
+                log.error("   → Sender email NOT verified in SendGrid. Verify it at: https://app.sendgrid.com/");
+            } else if (e.getMessage().contains("401")) {
+                log.error("   → Invalid SendGrid API key. Check SENDGRID_API_KEY env variable.");
+            }
+            return false;
+        }
+    }
+
+    /**
+     * Build SendGrid API request
+     */
+    private Map<String, Object> buildSendGridRequest(String toEmail, String subject, String htmlContent) {
+        Map<String, Object> mail = new HashMap<>();
+
+        // From
+        Map<String, String> from = new HashMap<>();
+        from.put("email", fromEmail);
+        mail.put("from", from);
+
+        // Subject
+        mail.put("subject", subject);
+
+        // Content
+        Map<String, String> content = new HashMap<>();
+        content.put("type", "text/html");
+        content.put("value", htmlContent);
+        mail.put("content", new Object[]{content});
+
+        // To
+        Map<String, Object> personalization = new HashMap<>();
+        Map<String, String> to = new HashMap<>();
+        to.put("email", toEmail);
+        personalization.put("to", new Object[]{to});
+        mail.put("personalizations", new Object[]{personalization});
+
+        return mail;
+    }
+
+    /**
+     * Generate OTP email HTML
+     */
+    private String generateOtpHtml(String otp) {
+        return "<!DOCTYPE html>\n" +
+            "<html><head><meta charset='UTF-8'><style>\n" +
+            "body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; }\n" +
+            ".container { max-width: 600px; margin: 40px auto; background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); overflow: hidden; }\n" +
+            ".header { background: linear-gradient(135deg, #1a73e8 0%, #8b5cf6 100%); color: white; padding: 40px 20px; text-align: center; }\n" +
+            ".header h1 { margin: 0; font-size: 28px; font-weight: 700; }\n" +
+            ".content { padding: 40px 30px; }\n" +
+            ".otp-box { background: #f8f9fa; border: 2px solid #e8eaed; border-radius: 8px; padding: 24px; text-align: center; margin: 30px 0; }\n" +
+            ".otp-code { font-size: 36px; font-weight: 700; color: #1a73e8; letter-spacing: 4px; font-family: monospace; }\n" +
+            ".info-box { background: #e8f0fe; border-left: 4px solid #1a73e8; padding: 16px; margin: 20px 0; border-radius: 4px; }\n" +
+            ".info-box p { margin: 0; font-size: 13px; color: #1a73e8; }\n" +
+            ".footer { background: #f8f9fa; padding: 20px; text-align: center; border-top: 1px solid #e8eaed; font-size: 12px; color: #80868b; }\n" +
+            "</style></head><body>\n" +
+            "<div class='container'>\n" +
+            "  <div class='header'><h1>🧠 NeuraScan</h1><p>Email Verification</p></div>\n" +
+            "  <div class='content'>\n" +
+            "    <p>Enter this code to verify your email:</p>\n" +
+            "    <div class='otp-box'>\n" +
+            "      <div class='otp-code'>" + otp + "</div>\n" +
+            "      <div style='font-size: 12px; color: #80868b; margin-top: 12px;'>Valid for 15 minutes</div>\n" +
+            "    </div>\n" +
+            "    <div class='info-box'>\n" +
+            "      <p><strong>Never share this code</strong> with anyone</p>\n" +
+            "    </div>\n" +
+            "  </div>\n" +
+            "  <div class='footer'><p>© 2026 NeuraScan. All rights reserved.</p></div>\n" +
+            "</div>\n" +
+            "</body></html>";
+    }
+
+    /**
+     * Generate password reset email HTML
+     */
+    private String generatePasswordResetHtml(String resetLink) {
+        return "<!DOCTYPE html>\n" +
+            "<html><head><meta charset='UTF-8'><style>\n" +
+            "body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; }\n" +
+            ".container { max-width: 600px; margin: 40px auto; background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); overflow: hidden; }\n" +
+            ".header { background: linear-gradient(135deg, #d93025 0%, #f57c00 100%); color: white; padding: 40px 20px; text-align: center; }\n" +
+            ".header h1 { margin: 0; font-size: 28px; font-weight: 700; }\n" +
+            ".content { padding: 40px 30px; }\n" +
+            ".button-box { text-align: center; margin: 30px 0; }\n" +
+            ".reset-button { background: linear-gradient(135deg, #d93025 0%, #f57c00 100%); color: white; padding: 14px 40px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block; }\n" +
+            ".info-box { background: #fce5e5; border-left: 4px solid #d93025; padding: 16px; margin: 20px 0; border-radius: 4px; }\n" +
+            ".info-box p { margin: 0; font-size: 13px; color: #d93025; }\n" +
+            ".footer { background: #f8f9fa; padding: 20px; text-align: center; border-top: 1px solid #e8eaed; font-size: 12px; color: #80868b; }\n" +
+            "</style></head><body>\n" +
+            "<div class='container'>\n" +
+            "  <div class='header'><h1>🧠 NeuraScan</h1><p>Password Reset</p></div>\n" +
+            "  <div class='content'>\n" +
+            "    <p>Click the button below to reset your password:</p>\n" +
+            "    <div class='button-box'>\n" +
+            "      <a href='" + resetLink + "' class='reset-button'>Reset Password</a>\n" +
+            "    </div>\n" +
+            "    <p style='color: #80868b; font-size: 13px; text-align: center;'>Link expires in 1 hour</p>\n" +
+            "    <div class='info-box'>\n" +
+            "      <p>If you didn't request this, ignore this email</p>\n" +
+            "    </div>\n" +
+            "  </div>\n" +
+            "  <div class='footer'><p>© 2026 NeuraScan. All rights reserved.</p></div>\n" +
+            "</div>\n" +
+            "</body></html>";
+    }
+}

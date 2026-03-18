@@ -4,8 +4,8 @@ import com.ai.learningdetection.dto.ApiResponse;
 import com.ai.learningdetection.dto.AuthDTOs;
 import com.ai.learningdetection.security.IdentifiablePrincipal;
 import com.ai.learningdetection.service.AuthService;
-import com.ai.learningdetection.service.EmailVerificationService;
-import com.ai.learningdetection.service.EmailVerificationService.OtpSendResult;
+import com.ai.learningdetection.service.EmailService;
+import com.ai.learningdetection.service.OTPService;
 import com.ai.learningdetection.service.FirebaseLoginService;
 import com.google.cloud.firestore.DocumentSnapshot;
 import com.google.cloud.firestore.Firestore;
@@ -27,7 +27,8 @@ public class AuthController {
 
     private final AuthService authService;
     private final FirebaseLoginService firebaseLoginService;
-    private final com.ai.learningdetection.service.EmailVerificationService emailVerificationService;
+    private final EmailService emailService;
+    private final OTPService otpService;
     private final Firestore firestore;
 
     // ============================================================
@@ -110,31 +111,41 @@ public class AuthController {
     @PostMapping("/send-otp")
     public ResponseEntity<ApiResponse<String>> sendOtp(
             @Valid @RequestBody AuthDTOs.SendOtpRequest request) {
-        OtpSendResult result = emailVerificationService.sendOtp(request.getEmail());
-        
-        if (result.emailSent) {
-            // Email sent successfully
-            return ResponseEntity.ok(ApiResponse.success(null, "6-digit OTP sent successfully to your email"));
-        } else if (result.otpGenerated) {
-            // OTP generated but email failed (network issue)
-            log.warn("⚠️  OTP generated but email delivery failed for: {}", request.getEmail());
-            return ResponseEntity.status(202).body(ApiResponse.success(null, 
-                "OTP generated but email delivery failed. Please check your internet connection. OTP is available in backup (dev mode)."));
-        } else {
-            // Both OTP generation and email failed
-            return ResponseEntity.status(500).body(ApiResponse.error(
-                "Failed to generate OTP. Please try again later."));
+        try {
+            // Generate OTP
+            String otp = otpService.generateOTP(request.getEmail());
+            
+            // Send email
+            boolean emailSent = emailService.sendOtpEmail(request.getEmail(), otp);
+            
+            if (emailSent) {
+                log.info("✅ OTP sent to: {}", request.getEmail());
+                return ResponseEntity.ok(ApiResponse.success(null, "OTP sent successfully to your email"));
+            } else {
+                log.warn("⚠️  OTP generated but email failed for: {}", request.getEmail());
+                return ResponseEntity.ok(ApiResponse.success(null, 
+                    "OTP generated. Check email or use it from Firestore verification_tokens collection."));
+            }
+        } catch (Exception e) {
+            log.error("❌ OTP generation failed: {}", e.getMessage());
+            return ResponseEntity.status(500).body(ApiResponse.error("Failed to generate OTP"));
         }
     }
 
     @PostMapping("/verify-otp")
     public ResponseEntity<ApiResponse<Boolean>> verifyOtp(
             @Valid @RequestBody AuthDTOs.VerifyOtpRequest request) {
-        boolean isValid = emailVerificationService.verifyOtp(request.getEmail(), request.getOtp());
-        if (isValid) {
-            return ResponseEntity.ok(ApiResponse.success(true, "OTP verified successfully"));
-        } else {
-            return ResponseEntity.badRequest().body(ApiResponse.error("Invalid or expired OTP"));
+        try {
+            boolean isValid = otpService.verifyOTP(request.getEmail(), request.getOtp());
+            if (isValid) {
+                otpService.consumeOTP(request.getEmail(), request.getOtp());
+                return ResponseEntity.ok(ApiResponse.success(true, "OTP verified successfully"));
+            } else {
+                return ResponseEntity.badRequest().body(ApiResponse.error("Invalid or expired OTP"));
+            }
+        } catch (Exception e) {
+            log.error("❌ OTP verification failed: {}", e.getMessage());
+            return ResponseEntity.status(500).body(ApiResponse.error("OTP verification failed"));
         }
     }
 

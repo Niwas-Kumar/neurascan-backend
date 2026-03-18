@@ -22,7 +22,7 @@ public class AuthService {
     private final Firestore firestore;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
-    private final EmailVerificationService emailVerificationService;
+    private final OTPService otpService;
 
     private static final String TEACHERS_COLLECTION = "teachers";
     private static final String PARENTS_COLLECTION = "parents";
@@ -42,10 +42,11 @@ public class AuthService {
 
             // Verify OTP before creating account
             log.info("🔐 Verifying OTP for teacher registration: {}", request.getEmail());
-            if (!emailVerificationService.consumeOtp(request.getEmail(), request.getOtp())) {
+            if (!otpService.verifyOTP(request.getEmail(), request.getOtp())) {
                 log.error("❌ OTP verification failed for teacher registration: {}", request.getEmail());
                 throw new BadCredentialsException("Invalid or expired OTP verification code. Please request a new code.");
             }
+            otpService.consumeOTP(request.getEmail(), request.getOtp());
 
             DocumentReference docRef = firestore.collection(TEACHERS_COLLECTION).document();
             Teacher teacher = Teacher.builder()
@@ -128,10 +129,11 @@ public class AuthService {
 
             // Verify OTP before creating account
             log.info("🔐 Verifying OTP for parent registration: {}", request.getEmail());
-            if (!emailVerificationService.consumeOtp(request.getEmail(), request.getOtp())) {
+            if (!otpService.verifyOTP(request.getEmail(), request.getOtp())) {
                 log.error("❌ OTP verification failed for parent registration: {}", request.getEmail());
                 throw new BadCredentialsException("Invalid or expired OTP verification code. Please request a new code.");
             }
+            otpService.consumeOTP(request.getEmail(), request.getOtp());
 
             DocumentReference docRef = firestore.collection(PARENTS_COLLECTION).document();
             Parent parent = Parent.builder()
