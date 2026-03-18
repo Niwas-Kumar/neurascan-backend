@@ -51,7 +51,7 @@ public class EmailService {
      */
     private boolean sendEmail(String toEmail, String subject, String htmlContent) {
         try {
-            log.info("📧 Sending email to: {}", toEmail);
+            log.info("📧 Sending email to: {} | From: {}", toEmail, fromEmail);
 
             // Build SendGrid request
             Map<String, Object> request = buildSendGridRequest(toEmail, subject, htmlContent);
@@ -70,11 +70,36 @@ public class EmailService {
             return true;
 
         } catch (Exception e) {
-            log.error("❌ Email send failed: {}", e.getMessage());
-            if (e.getMessage().contains("403")) {
-                log.error("   → Sender email NOT verified in SendGrid. Verify it at: https://app.sendgrid.com/");
-            } else if (e.getMessage().contains("401")) {
-                log.error("   → Invalid SendGrid API key. Check SENDGRID_API_KEY env variable.");
+            String errorMsg = e.getMessage();
+            log.error("❌ Email send failed: {}", errorMsg);
+            log.error("   → Sender email used: {}", fromEmail);
+            
+            if (errorMsg != null) {
+                if (errorMsg.contains("403") || errorMsg.contains("verified Sender Identity")) {
+                    log.error("╔════════════════════════════════════════════════════════════════════╗");
+                    log.error("║ ❌ SENDGRID SENDER EMAIL NOT VERIFIED                             ║");
+                    log.error("╠════════════════════════════════════════════════════════════════════╣");
+                    log.error("║ Issue: Email '{}' is not verified in SendGrid                    ║", fromEmail);
+                    log.error("║                                                                    ║");
+                    log.error("║ Solution:                                                          ║");
+                    log.error("║ 1. Go to: https://app.sendgrid.com/settings/sender_auth            ║");
+                    log.error("║ 2. Click 'Verify a Single Sender'                                  ║");
+                    log.error("║ 3. Enter email: {} and verify                                     ║", fromEmail);
+                    log.error("║                                                                    ║");
+                    log.error("║ OR: Set SENDGRID_FROM_EMAIL env var to a verified email          ║");
+                    log.error("║ Example: export SENDGRID_FROM_EMAIL=your-verified@domain.com        ║");
+                    log.error("╚════════════════════════════════════════════════════════════════════╝");
+                } else if (errorMsg.contains("401")) {
+                    log.error("╔════════════════════════════════════════════════════════════════════╗");
+                    log.error("║ ❌ INVALID SENDGRID API KEY                                        ║");
+                    log.error("╠════════════════════════════════════════════════════════════════════╣");
+                    log.error("║ Issue: SENDGRID_API_KEY is missing or invalid                      ║");
+                    log.error("║                                                                    ║");
+                    log.error("║ Solution: Set environment variable:                                ║");
+                    log.error("║ export SENDGRID_API_KEY=SG.your_actual_api_key_here               ║");
+                    log.error("║ Get your API key: https://app.sendgrid.com/settings/api_keys       ║");
+                    log.error("╚════════════════════════════════════════════════════════════════════╝");
+                }
             }
             return false;
         }
