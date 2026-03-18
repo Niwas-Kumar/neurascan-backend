@@ -17,6 +17,13 @@ public class Quiz {
     private String topic;
     private Date createdAt;
     private List<QuizQuestion> questions;
+    
+    // Distribution Tracking
+    private Date distributedAt;         // When quiz was sent to students
+    private List<String> distributedToEmail;  // List of email addresses sent to
+    private int totalDistributed;       // Count of distribution sends
+    private int totalAttempts;          // Count of quiz attempts made
+    private double averageScore;        // Average score across all attempts
 
     @Getter
     @Setter

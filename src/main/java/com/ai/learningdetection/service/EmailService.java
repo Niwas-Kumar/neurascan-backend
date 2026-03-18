@@ -47,6 +47,15 @@ public class EmailService {
     }
 
     /**
+     * Send quiz invitation email via SendGrid
+     */
+    public boolean sendQuizInvitationEmail(String toEmail, String studentName, String quizTopic, String attemptUrl, String teacherName, String customMessage) {
+        String subject = "🧠 NeuraScan — New Quiz for " + studentName;
+        String htmlContent = generateQuizInvitationHtml(studentName, quizTopic, attemptUrl, teacherName, customMessage);
+        return sendEmail(toEmail, subject, htmlContent);
+    }
+
+    /**
      * Generic email send method
      */
     private boolean sendEmail(String toEmail, String subject, String htmlContent) {
@@ -199,6 +208,73 @@ public class EmailService {
             "    </div>\n" +
             "  </div>\n" +
             "  <div class='footer'><p>© 2026 NeuraScan. All rights reserved.</p></div>\n" +
+            "</div>\n" +
+            "</body></html>";
+    }
+
+    /**
+     * Generate quiz invitation email HTML
+     */
+    private String generateQuizInvitationHtml(String studentName, String quizTopic, String attemptUrl, String teacherName, String customMessage) {
+        String messageSection = (customMessage != null && !customMessage.isEmpty())
+            ? "    <div class='message-box'>\n" +
+              "      <p><strong>Message from teacher:</strong></p>\n" +
+              "      <p>" + customMessage + "</p>\n" +
+              "    </div>\n"
+            : "";
+
+        return "<!DOCTYPE html>\n" +
+            "<html><head><meta charset='UTF-8'><style>\n" +
+            "body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; margin: 0; padding: 0; }\n" +
+            ".container { max-width: 600px; margin: 40px auto; background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); overflow: hidden; }\n" +
+            ".header { background: linear-gradient(135deg, #1a73e8 0%, #8b5cf6 100%); color: white; padding: 40px 20px; text-align: center; }\n" +
+            ".header h1 { margin: 0; font-size: 28px; font-weight: 700; }\n" +
+            ".header p { margin: 10px 0 0; opacity: 0.9; }\n" +
+            ".content { padding: 40px 30px; }\n" +
+            ".quiz-box { background: linear-gradient(135deg, #e8f0fe 0%, #f3e8ff 100%); border-radius: 10px; padding: 24px; text-align: center; margin: 24px 0; }\n" +
+            ".quiz-topic { font-size: 24px; font-weight: 700; color: #1a73e8; margin-bottom: 8px; }\n" +
+            ".quiz-student { font-size: 14px; color: #5f6368; }\n" +
+            ".button-box { text-align: center; margin: 30px 0; }\n" +
+            ".start-button { background: linear-gradient(135deg, #1a73e8 0%, #8b5cf6 100%); color: white; padding: 16px 48px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; display: inline-block; }\n" +
+            ".message-box { background: #f8f9fa; border-left: 4px solid #8b5cf6; padding: 16px; margin: 20px 0; border-radius: 4px; }\n" +
+            ".message-box p { margin: 0 0 8px; font-size: 14px; color: #5f6368; }\n" +
+            ".info-box { background: #e8f0fe; border-radius: 8px; padding: 16px; margin: 20px 0; }\n" +
+            ".info-box ul { margin: 0; padding-left: 20px; font-size: 13px; color: #1a73e8; }\n" +
+            ".info-box li { margin: 8px 0; }\n" +
+            ".footer { background: #f8f9fa; padding: 20px; text-align: center; border-top: 1px solid #e8eaed; font-size: 12px; color: #80868b; }\n" +
+            "</style></head><body>\n" +
+            "<div class='container'>\n" +
+            "  <div class='header'>\n" +
+            "    <h1>🧠 NeuraScan</h1>\n" +
+            "    <p>New Quiz Assignment</p>\n" +
+            "  </div>\n" +
+            "  <div class='content'>\n" +
+            "    <p>Hello,</p>\n" +
+            "    <p>A new quiz has been assigned for <strong>" + studentName + "</strong> by " + teacherName + ".</p>\n" +
+            "    <div class='quiz-box'>\n" +
+            "      <div class='quiz-topic'>📝 " + quizTopic + "</div>\n" +
+            "      <div class='quiz-student'>Quiz for: " + studentName + "</div>\n" +
+            "    </div>\n" +
+            messageSection +
+            "    <div class='button-box'>\n" +
+            "      <a href='" + attemptUrl + "' class='start-button'>Start Quiz Now</a>\n" +
+            "    </div>\n" +
+            "    <div class='info-box'>\n" +
+            "      <p style='margin: 0 0 12px; font-weight: 600; color: #1a73e8;'>📋 Important Information:</p>\n" +
+            "      <ul>\n" +
+            "        <li>This link is unique and should only be used by " + studentName + "</li>\n" +
+            "        <li>The quiz can only be taken once</li>\n" +
+            "        <li>Time spent on each question is tracked</li>\n" +
+            "        <li>Results will be shared with the teacher</li>\n" +
+            "      </ul>\n" +
+            "    </div>\n" +
+            "    <p style='color: #80868b; font-size: 13px;'>If the button doesn't work, copy and paste this link into your browser:</p>\n" +
+            "    <p style='color: #1a73e8; font-size: 12px; word-break: break-all;'>" + attemptUrl + "</p>\n" +
+            "  </div>\n" +
+            "  <div class='footer'>\n" +
+            "    <p>© 2026 NeuraScan. AI-Powered Learning Disability Detection.</p>\n" +
+            "    <p>This is an automated message. Please do not reply.</p>\n" +
+            "  </div>\n" +
             "</div>\n" +
             "</body></html>";
     }

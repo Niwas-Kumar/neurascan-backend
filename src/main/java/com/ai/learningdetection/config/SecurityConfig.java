@@ -48,9 +48,13 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 // Public health check endpoints (for deployment platforms like Render)
                 .requestMatchers("/actuator/health", "/health").permitAll()
-                
+
                 // Public auth endpoints
                 .requestMatchers("/api/auth/**", "/auth/**").permitAll()
+
+                // Public quiz attempt endpoints (accessed via email link token)
+                .requestMatchers("/api/quizzes/public/**", "/quizzes/public/**").permitAll()
+                .requestMatchers("/api/quiz-attempt/**", "/quiz-attempt/**").permitAll()
 
                 // Student management — TEACHER only
                 .requestMatchers(HttpMethod.GET,    "/api/students/**", "/students/**").hasRole("TEACHER")

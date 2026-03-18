@@ -5,6 +5,8 @@ import com.ai.learningdetection.dto.QuizDTOs;
 import com.ai.learningdetection.entity.QuizResponse;
 import com.ai.learningdetection.security.IdentifiablePrincipal;
 import com.ai.learningdetection.service.QuizService;
+import com.ai.learningdetection.service.QuizAttemptService;
+import com.ai.learningdetection.service.QuizDistributionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -14,6 +16,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 
 @RestController
 @RequestMapping({"/api/quizzes", "/quizzes"})
@@ -21,6 +24,12 @@ import java.util.List;
 public class QuizController {
 
     private final QuizService quizService;
+    private final QuizAttemptService quizAttemptService;
+    private final QuizDistributionService quizDistributionService;
+
+    // ============================================================
+    // EXISTING ENDPOINTS (Created/Retrieved by Teachers)
+    // ============================================================
 
     @PostMapping
     @PreAuthorize("hasRole('TEACHER')")
@@ -59,7 +68,6 @@ public class QuizController {
             @AuthenticationPrincipal IdentifiablePrincipal principal) {
 
         submissionRequest.setQuizId(quizId);
-        // only teacher or parent can submit via student record
         QuizResponse result = quizService.submitQuizResponse(submissionRequest);
         return ResponseEntity.ok(ApiResponse.success(result, "Quiz submitted"));
     }
@@ -89,4 +97,199 @@ public class QuizController {
         List<QuizResponse> responses = quizService.getQuizResponsesForStudent(studentId, principal.getId(), role);
         return ResponseEntity.ok(ApiResponse.success(responses, "Student quiz responses retrieved"));
     }
+
+    // ============================================================
+    // NEW ENDPOINTS: Quiz Distribution & Attempts
+    // ============================================================
+
+    /**
+     * POST /api/quizzes/{quizId}/distribute
+     * Distribute a quiz to students and/or parents.
+     * Teacher only endpoint.
+     *
+     * Request body:
+     * {
+     *   "studentIds": ["student1", "student2"],
+     *   "parentEmails": ["parent1@email.com", "parent2@email.com"],
+     *   "customMessage": "Optional message to include in email"
+     * }
+     */
+    @PostMapping("/{quizId}/distribute")
+    @PreAuthorize("hasRole('TEACHER')")
+    public ResponseEntity<ApiResponse<List<QuizDTOs.QuizLinkResponse>>> distributeQuiz(
+            @PathVariable String quizId,
+            @RequestBody QuizDTOs.QuizDistributionRequest request,
+            @AuthenticationPrincipal IdentifiablePrincipal principal) {
+
+        try {
+            List<QuizDTOs.QuizLinkResponse> links = new java.util.ArrayList<>();
+
+            // Send to students if provided
+            if (request.getStudentIds() != null && !request.getStudentIds().isEmpty()) {
+                links.addAll(quizDistributionService.distributeQuizToStudents(
+                        quizId,
+                        request.getStudentIds(),
+                        principal.getId(),
+                        request.getCustomMessage()));
+            }
+
+            // Send to parents if provided
+            if (request.getParentEmails() != null && !request.getParentEmails().isEmpty()) {
+                links.addAll(quizDistributionService.distributeQuizToParents(
+                        quizId,
+                        request.getParentEmails(),
+                        principal.getId(),
+                        request.getCustomMessage()));
+            }
+
+            return ResponseEntity.ok(ApiResponse.success(links, "Quiz distributed successfully"));
+
+        } catch (Exception e) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("Failed to distribute quiz: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * POST /api/quizzes/{quizId}/attempt
+     * Start a new quiz attempt using a shared token.
+     * Public endpoint - no authentication required (token validates access).
+     *
+     * Request body:
+     * {
+     *   "quizId": "quiz123",
+     *   "token": "secure_token_from_email_link"
+     * }
+     */
+    @PostMapping("/{quizId}/attempt")
+    public ResponseEntity<ApiResponse<QuizDTOs.QuizAttemptDetail>> startQuizAttempt(
+            @PathVariable String quizId,
+            @RequestBody QuizDTOs.QuizAttemptStartRequest request) {
+
+        try {
+            // Extract recipient info from token validation
+            // For now, we'll use a simple approach - the frontend will send these
+            QuizDTOs.QuizAttemptDetail attempt = quizAttemptService
+                    .startQuizAttempt(quizId, "tempRecipientId", "STUDENT", request.getToken());
+
+            return ResponseEntity.ok(ApiResponse.success(attempt, "Quiz attempt started"));
+
+        } catch (Exception e) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("Failed to start quiz attempt: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * POST /api/quizzes/attempts/{quizAttemptId}/response
+     * Submit a response to a single question.
+     * Student/Parent endpoint - no authentication required (token validates).
+     *
+     * Request body:
+     * {
+     *   "quizAttemptId": "attempt123",
+     *   "questionId": "question456",
+     *   "studentAnswer": "Option B",
+     *   "responseTimeMs": 5000
+     * }
+     */
+    @PostMapping("/attempts/{quizAttemptId}/response")
+    public ResponseEntity<ApiResponse<QuizDTOs.QuestionResponseDetail>> submitQuestionResponse(
+            @PathVariable String quizAttemptId,
+            @RequestBody QuizDTOs.QuestionResponseRequest request) {
+
+        try {
+            request.setQuizAttemptId(quizAttemptId);
+            QuizDTOs.QuestionResponseDetail response = quizAttemptService
+                    .submitQuestionResponse(quizAttemptId, request);
+
+            return ResponseEntity.ok(ApiResponse.success(response, "Response recorded"));
+
+        } catch (Exception e) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("Failed to submit response: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * POST /api/quizzes/attempts/{quizAttemptId}/complete
+     * Mark quiz attempt as complete and calculate final score.
+     * Triggers AI analysis.
+     */
+    @PostMapping("/attempts/{quizAttemptId}/complete")
+    public ResponseEntity<ApiResponse<QuizDTOs.QuizAttemptDetail>> completeQuizAttempt(
+            @PathVariable String quizAttemptId) {
+
+        try {
+            QuizDTOs.QuizAttemptDetail result = quizAttemptService.completeQuizAttempt(quizAttemptId);
+            return ResponseEntity.ok(ApiResponse.success(result, "Quiz completed"));
+
+        } catch (Exception e) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("Failed to complete quiz: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * GET /api/quizzes/attempts/{quizAttemptId}
+     * Retrieve full details of a quiz attempt with all question responses.
+     * Both student and teacher can access their own/student's attempts.
+     */
+    @GetMapping("/attempts/{quizAttemptId}")
+    public ResponseEntity<ApiResponse<QuizDTOs.QuizAttemptDetail>> getQuizAttemptDetails(
+            @PathVariable String quizAttemptId) {
+
+        try {
+            QuizDTOs.QuizAttemptDetail attempt = quizAttemptService.getQuizAttemptDetail(quizAttemptId);
+            return ResponseEntity.ok(ApiResponse.success(attempt, "Attempt details retrieved"));
+
+        } catch (Exception e) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("Failed to fetch attempt details: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * GET /api/quizzes/{quizId}/progress
+     * Get quiz progress and analytics (teacher dashboard).
+     * Shows participation rate, average score, student performance.
+     */
+    @GetMapping("/{quizId}/progress")
+    @PreAuthorize("hasRole('TEACHER')")
+    public ResponseEntity<ApiResponse<QuizDTOs.QuizProgressResponse>> getQuizProgress(
+            @PathVariable String quizId,
+            @AuthenticationPrincipal IdentifiablePrincipal principal) {
+
+        try {
+            QuizDTOs.QuizProgressResponse progress = quizDistributionService.getQuizProgress(quizId, principal.getId());
+            return ResponseEntity.ok(ApiResponse.success(progress, "Quiz progress retrieved"));
+
+        } catch (Exception e) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("Failed to fetch quiz progress: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * GET /api/quizzes/student/{studentId}/attempts
+     * Get all quiz attempts for a student for a specific quiz.
+     * Parent can view their child's attempts; Teacher can view their students.
+     */
+    @GetMapping("/student/{studentId}/attempts")
+    @PreAuthorize("hasAnyRole('PARENT', 'TEACHER')")
+    public ResponseEntity<ApiResponse<List<QuizDTOs.QuizAttemptDetail>>> getStudentQuizAttempts(
+            @PathVariable String studentId,
+            @RequestParam String quizId,
+            @AuthenticationPrincipal IdentifiablePrincipal principal) {
+
+        try {
+            List<QuizDTOs.QuizAttemptDetail> attempts = quizAttemptService.getStudentQuizAttempts(studentId, quizId);
+            return ResponseEntity.ok(ApiResponse.success(attempts, "Student quiz attempts retrieved"));
+
+        } catch (Exception e) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("Failed to fetch student attempts: " + e.getMessage()));
+        }
+    }
 }
+
