@@ -283,3 +283,4 @@ public class EmailVerificationService {
             throw new RuntimeException("Firestore error during OTP consumption", e);
         }
     }
+}

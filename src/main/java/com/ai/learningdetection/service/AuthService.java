@@ -75,9 +75,6 @@ public class AuthService {
             throw new RuntimeException("Firestore error during registration", e);
         }
     }
-            throw new RuntimeException("Firestore error during registration", e);
-        }
-    }
 
     public AuthDTOs.AuthResponse loginTeacher(AuthDTOs.LoginRequest request) {
         try {
