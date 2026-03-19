@@ -67,7 +67,13 @@ public class SecurityConfig {
                 .requestMatchers("/api/analysis/reports", "/analysis/reports").hasRole("TEACHER")
                 .requestMatchers("/api/analysis/dashboard", "/analysis/dashboard").hasRole("TEACHER")
 
-                // Quiz management — TEACHER only
+                // Parent quiz access - MUST be before the general /api/quizzes/** rule
+                .requestMatchers("/api/quizzes/student/*/responses", "/quizzes/student/*/responses").hasAnyRole("PARENT", "TEACHER")
+                .requestMatchers("/api/quizzes/student/*/attempts", "/quizzes/student/*/attempts").hasAnyRole("PARENT", "TEACHER")
+                .requestMatchers("/api/quizzes/student/*/all-attempts", "/quizzes/student/*/all-attempts").hasAnyRole("PARENT", "TEACHER")
+                .requestMatchers("/api/quiz-attempts/student/**", "/quiz-attempts/student/**").hasAnyRole("PARENT", "TEACHER")
+
+                // Quiz management — TEACHER only (general rule after specific parent endpoints)
                 .requestMatchers("/api/quizzes/**", "/quizzes/**").hasRole("TEACHER")
 
                 // Parent report access — PARENT only

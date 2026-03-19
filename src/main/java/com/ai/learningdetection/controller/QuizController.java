@@ -291,5 +291,33 @@ public class QuizController {
                     .body(ApiResponse.error("Failed to fetch student attempts: " + e.getMessage()));
         }
     }
+
+    /**
+     * GET /api/quizzes/student/{studentId}/all-attempts
+     * Get ALL quiz attempts for a student (all quizzes).
+     * This is for parent dashboard to show complete quiz progress.
+     */
+    @GetMapping("/student/{studentId}/all-attempts")
+    @PreAuthorize("hasAnyRole('PARENT', 'TEACHER')")
+    public ResponseEntity<ApiResponse<List<QuizDTOs.QuizAttemptDetail>>> getAllStudentQuizAttempts(
+            @PathVariable String studentId,
+            @AuthenticationPrincipal IdentifiablePrincipal principal,
+            Authentication authentication) {
+
+        try {
+            String role = authentication.getAuthorities().stream()
+                    .map(GrantedAuthority::getAuthority)
+                    .findFirst()
+                    .orElse("");
+
+            // Validate parent can access this student
+            List<QuizDTOs.QuizAttemptDetail> attempts = quizAttemptService.getAllStudentAttempts(studentId, principal.getId(), role);
+            return ResponseEntity.ok(ApiResponse.success(attempts, "All student quiz attempts retrieved"));
+
+        } catch (Exception e) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("Failed to fetch student attempts: " + e.getMessage()));
+        }
+    }
 }
 

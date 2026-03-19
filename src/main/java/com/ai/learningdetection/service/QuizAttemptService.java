@@ -311,24 +311,157 @@ public class QuizAttemptService {
     /**
      * Get all attempts for a student for a specific quiz.
      */
-    public List<QuizDTOs.QuizAttemptDetail> getStudentQuizAttempts(String studentId, String quizId) 
+    public List<QuizDTOs.QuizAttemptDetail> getStudentQuizAttempts(String studentId, String quizId)
             throws ExecutionException, InterruptedException {
-        
+
         try {
             QuerySnapshot snapshot = firestore.collection(QUIZ_ATTEMPTS_COLLECTION)
                     .whereEqualTo("studentId", studentId)
                     .whereEqualTo("quizId", quizId)
                     .get().get();
-            
+
             return snapshot.getDocuments().stream()
                     .map(doc -> doc.toObject(QuizAttempt.class))
                     .map(this::convertToAttemptDetail)
                     .collect(Collectors.toList());
-                    
+
         } catch (ExecutionException | InterruptedException e) {
             log.error("❌ Error fetching student quiz attempts: {}", e.getMessage());
             throw e;
         }
+    }
+
+    /**
+     * Get ALL quiz attempts for a student across all quizzes.
+     * Used by parent dashboard to show complete quiz progress.
+     * Validates that requester has permission to view this student's data.
+     */
+    public List<QuizDTOs.QuizAttemptDetail> getAllStudentAttempts(String studentId, String requesterId, String requesterRole)
+            throws ExecutionException, InterruptedException {
+
+        try {
+            // Validate access
+            if ("PARENT".equalsIgnoreCase(requesterRole) || "ROLE_PARENT".equalsIgnoreCase(requesterRole)) {
+                DocumentSnapshot parentDoc = firestore.collection("parents").document(requesterId).get().get();
+                if (!parentDoc.exists()) {
+                    throw new RuntimeException("Parent not found");
+                }
+                String linkedStudent = parentDoc.getString("studentId");
+
+                log.info("[QUIZ_ATTEMPTS] Parent: {} | Linked Student: {} | Requested: {}",
+                        requesterId, linkedStudent, studentId);
+
+                if (linkedStudent == null || linkedStudent.isEmpty()) {
+                    throw new RuntimeException("STUDENT_ID_NOT_SET|Student ID not set in your profile. Please go to Settings to add your child's student ID.");
+                }
+
+                if (!studentId.equals(linkedStudent)) {
+                    throw new RuntimeException("You do not have permission to view this student's data.");
+                }
+            } else if ("TEACHER".equalsIgnoreCase(requesterRole) || "ROLE_TEACHER".equalsIgnoreCase(requesterRole)) {
+                // Teacher can view any of their students
+                DocumentSnapshot studentDoc = firestore.collection("students").document(studentId).get().get();
+                if (!studentDoc.exists() || !requesterId.equals(studentDoc.getString("teacherId"))) {
+                    throw new RuntimeException("Not authorized to access this student");
+                }
+            } else {
+                throw new RuntimeException("Not authorized");
+            }
+
+            // Fetch all quiz attempts for this student
+            QuerySnapshot snapshot = firestore.collection(QUIZ_ATTEMPTS_COLLECTION)
+                    .whereEqualTo("studentId", studentId)
+                    .get().get();
+
+            List<QuizDTOs.QuizAttemptDetail> attempts = new ArrayList<>();
+
+            for (DocumentSnapshot doc : snapshot.getDocuments()) {
+                QuizAttempt attempt = doc.toObject(QuizAttempt.class);
+                QuizDTOs.QuizAttemptDetail detail = convertToAttemptDetailWithResponses(attempt);
+
+                // Fetch quiz topic if available
+                try {
+                    DocumentSnapshot quizDoc = firestore.collection(QUIZZES_COLLECTION)
+                            .document(attempt.getQuizId()).get().get();
+                    if (quizDoc.exists()) {
+                        detail.setTopic(quizDoc.getString("topic"));
+                    }
+                } catch (Exception e) {
+                    log.warn("Could not fetch quiz topic: {}", e.getMessage());
+                }
+
+                attempts.add(detail);
+            }
+
+            // Sort by date, most recent first
+            attempts.sort((a, b) -> {
+                Date dateA = a.getCompletedAt() != null ? a.getCompletedAt() : a.getStartedAt();
+                Date dateB = b.getCompletedAt() != null ? b.getCompletedAt() : b.getStartedAt();
+                if (dateA == null && dateB == null) return 0;
+                if (dateA == null) return 1;
+                if (dateB == null) return -1;
+                return dateB.compareTo(dateA);
+            });
+
+            log.info("[QUIZ_ATTEMPTS_SUCCESS] Found {} quiz attempts for student: {}", attempts.size(), studentId);
+            return attempts;
+
+        } catch (ExecutionException | InterruptedException e) {
+            log.error("❌ Error fetching all student quiz attempts: {}", e.getMessage());
+            throw e;
+        }
+    }
+
+    /**
+     * Convert attempt to detail with question responses included.
+     */
+    private QuizDTOs.QuizAttemptDetail convertToAttemptDetailWithResponses(QuizAttempt attempt) {
+        List<QuizDTOs.QuestionResponseDetail> responses = new ArrayList<>();
+
+        if (attempt.getQuestionResponseIds() != null && !attempt.getQuestionResponseIds().isEmpty()) {
+            for (String responseId : attempt.getQuestionResponseIds()) {
+                try {
+                    DocumentSnapshot respSnap = firestore.collection(QUESTION_RESPONSES_COLLECTION)
+                            .document(responseId).get().get();
+
+                    if (respSnap.exists()) {
+                        QuestionResponse qResp = respSnap.toObject(QuestionResponse.class);
+                        responses.add(QuizDTOs.QuestionResponseDetail.builder()
+                                .id(qResp.getId())
+                                .questionId(qResp.getQuestionId())
+                                .questionText(qResp.getQuestionText())
+                                .correctAnswer(qResp.getCorrectAnswer())
+                                .studentAnswer(qResp.getStudentAnswer())
+                                .isCorrect(qResp.isCorrect())
+                                .responseTimeMs(qResp.getResponseTimeMs())
+                                .confidenceLevel(qResp.getConfidenceLevel())
+                                .explanationNote(qResp.getExplanationNote())
+                                .build());
+                    }
+                } catch (Exception e) {
+                    log.warn("Could not fetch response {}: {}", responseId, e.getMessage());
+                }
+            }
+        }
+
+        return QuizDTOs.QuizAttemptDetail.builder()
+                .id(attempt.getId())
+                .quizId(attempt.getQuizId())
+                .studentId(attempt.getStudentId())
+                .parentId(attempt.getParentId())
+                .attemptToken(attempt.getAttemptToken())
+                .startedAt(attempt.getStartedAt())
+                .completedAt(attempt.getCompletedAt())
+                .isCompleted(attempt.isCompleted())
+                .totalQuestions(attempt.getTotalQuestions())
+                .correctAnswers(attempt.getCorrectAnswers())
+                .score(attempt.getScore())
+                .totalTimeSpentMs(attempt.getTotalTimeSpentMs())
+                .questionResponses(responses)
+                .learningGapSummary(attempt.getLearningGapSummary())
+                .strongAreas(attempt.getStrongAreas())
+                .weakAreas(attempt.getWeakAreas())
+                .build();
     }
 
     // ============================================================

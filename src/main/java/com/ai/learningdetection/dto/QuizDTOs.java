@@ -90,6 +90,7 @@ public class QuizDTOs {
     public static class QuizAttemptDetail {
         private String id;              // QuizAttemptId
         private String quizId;
+        private String topic;           // Quiz topic (for display)
         private String studentId;
         private String parentId;
         private String attemptToken;
