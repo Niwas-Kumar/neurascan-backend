@@ -65,36 +65,50 @@ public class QuizDistributionService {
             
             List<QuizDTOs.QuizLinkResponse> links = new ArrayList<>();
             List<String> sentEmails = new ArrayList<>();
-            
+
             // Create links for each student
             for (String studentId : studentIds) {
                 try {
                     DocumentSnapshot studentSnap = firestore.collection(STUDENTS_COLLECTION)
                             .document(studentId).get().get();
-                    
+
                     if (!studentSnap.exists()) {
                         log.warn("⚠️ Student not found: {}", studentId);
                         continue;
                     }
-                    
+
                     Student student = studentSnap.toObject(Student.class);
-                    String studentEmail = student.getEmail();
-                    
+
+                    // Get parent email from parent entity using parentUid
+                    String parentEmail = null;
+                    if (student.getParentUid() != null && !student.getParentUid().isEmpty()) {
+                        DocumentSnapshot parentSnap = firestore.collection("parents")
+                                .document(student.getParentUid()).get().get();
+                        if (parentSnap.exists()) {
+                            parentEmail = parentSnap.getString("email");
+                        }
+                    }
+
+                    if (parentEmail == null || parentEmail.isEmpty()) {
+                        log.warn("⚠️ No parent email found for student: {}", studentId);
+                        continue;
+                    }
+
                     // Create quiz link
                     QuizDTOs.QuizLinkResponse linkResponse = createAndSendQuizLink(
                             quizId,
                             studentId,
-                            studentEmail,
+                            parentEmail,
                             "STUDENT",
                             quiz.getTopic(),
                             customMessage,
                             teacherId,
                             quiz.getClassId());
-                    
+
                     links.add(linkResponse);
-                    sentEmails.add(studentEmail);
-                    
-                    log.info("📧 Quiz link sent to student: {} ({})", student.getName(), studentEmail);
+                    sentEmails.add(parentEmail);
+
+                    log.info("📧 Quiz link sent for student: {} to parent: {}", student.getName(), parentEmail);
                     
                 } catch (Exception e) {
                     log.error("❌ Error sending quiz to student {}: {}", studentId, e.getMessage());

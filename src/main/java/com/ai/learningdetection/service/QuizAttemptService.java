@@ -219,7 +219,7 @@ public class QuizAttemptService {
             
             attempt.setScore(score);
             attempt.setCompletedAt(new Date());
-            attempt.setIsCompleted(true);
+            attempt.setCompleted(true);
             
             // Save completion
             firestore.collection(QUIZ_ATTEMPTS_COLLECTION)
