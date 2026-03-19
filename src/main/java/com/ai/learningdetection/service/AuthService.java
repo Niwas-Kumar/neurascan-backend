@@ -121,7 +121,7 @@ public class AuthService {
     public AuthDTOs.AuthResponse registerParent(AuthDTOs.ParentRegisterRequest request) {
         try {
             log.info("📝 Registering new parent: {}", request.getEmail());
-            
+
             if (emailExists(request.getEmail())) {
                 log.warn("❌ Registration failed - email already exists: {}", request.getEmail());
                 throw new EmailAlreadyExistsException(request.getEmail());
@@ -147,6 +147,11 @@ public class AuthService {
 
             docRef.set(parent).get();
             log.info("✓ Successfully registered new parent in Firestore: {} ({})", parent.getName(), parent.getEmail());
+
+            // Link student to parent (set parentUid on student record)
+            if (request.getStudentId() != null && !request.getStudentId().isEmpty()) {
+                linkStudentToParent(request.getStudentId(), parent.getId());
+            }
 
             return AuthDTOs.AuthResponse.builder()
                     .jwtToken(null) // Can generate token if auto-login is desired
@@ -206,6 +211,27 @@ public class AuthService {
 
     private boolean existsInCollection(String collection, String email) throws InterruptedException, ExecutionException {
         return !firestore.collection(collection).whereEqualTo("email", email).limit(1).get().get().isEmpty();
+    }
+
+    /**
+     * Link a student to a parent by setting parentUid on the student record.
+     * This enables quiz distribution emails to be sent to the parent.
+     */
+    private void linkStudentToParent(String studentId, String parentId) {
+        try {
+            DocumentReference studentRef = firestore.collection("students").document(studentId);
+            DocumentSnapshot studentSnap = studentRef.get().get();
+
+            if (studentSnap.exists()) {
+                studentRef.update("parentUid", parentId).get();
+                log.info("✓ Linked student {} to parent {}", studentId, parentId);
+            } else {
+                log.warn("⚠️ Student {} not found, could not link to parent", studentId);
+            }
+        } catch (Exception e) {
+            log.error("❌ Error linking student to parent: {}", e.getMessage());
+            // Don't fail registration if linking fails
+        }
     }
 }
 

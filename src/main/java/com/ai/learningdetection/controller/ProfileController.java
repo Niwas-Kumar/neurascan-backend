@@ -139,6 +139,9 @@ public class ProfileController {
         // If parent, also update studentId (for linking to child's progress)
         if (!teacher && request.getStudentId() != null && !request.getStudentId().isEmpty()) {
             firestore.collection(collection).document(principal.getId()).update("studentId", request.getStudentId()).get();
+
+            // Also link the student to this parent (set parentUid on student record)
+            linkStudentToParent(request.getStudentId(), principal.getId());
         }
         
         // Fetch and return the updated profile
@@ -199,5 +202,22 @@ public class ProfileController {
         firestore.collection(collection).document(principal.getId()).update("password", encoded).get();
 
         return ResponseEntity.ok(ApiResponse.success(null, "Password changed successfully"));
+    }
+
+    /**
+     * Link a student to a parent by setting parentUid on the student record.
+     */
+    private void linkStudentToParent(String studentId, String parentId) {
+        try {
+            var studentRef = firestore.collection("students").document(studentId);
+            var studentSnap = studentRef.get().get();
+
+            if (studentSnap.exists()) {
+                studentRef.update("parentUid", parentId).get();
+            }
+        } catch (Exception e) {
+            // Log but don't fail the profile update
+            e.printStackTrace();
+        }
     }
 }
