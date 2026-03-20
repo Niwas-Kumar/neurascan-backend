@@ -6,6 +6,7 @@ import com.ai.learningdetection.entity.TestPaper;
 import com.ai.learningdetection.entity.Student;
 import com.ai.learningdetection.exception.ResourceNotFoundException;
 import com.ai.learningdetection.exception.ImageValidationException;
+import com.ai.learningdetection.exception.UnauthorizedAccessException;
 import com.ai.learningdetection.util.RiskLevelUtil;
 import com.google.cloud.firestore.*;
 import com.google.cloud.Timestamp;
