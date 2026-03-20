@@ -98,6 +98,25 @@ public class GlobalExceptionHandler {
     }
 
     // -------------------------------------------------------
+    // Image Validation Error (Not a handwriting paper) — 400
+    // -------------------------------------------------------
+    @ExceptionHandler(ImageValidationException.class)
+    public ResponseEntity<Map<String, Object>> handleImageValidation(ImageValidationException ex) {
+        log.warn("Image validation failed: {} (confidence: {}%)", ex.getReason(), ex.getConfidence());
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", false);
+        response.put("validation_error", true);
+        response.put("reason", ex.getReason());
+        response.put("message", ex.getUserMessage());
+        response.put("confidence", ex.getConfidence());
+
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(response);
+    }
+
+    // -------------------------------------------------------
     // File Too Large — 413
     // -------------------------------------------------------
     @ExceptionHandler(MaxUploadSizeExceededException.class)

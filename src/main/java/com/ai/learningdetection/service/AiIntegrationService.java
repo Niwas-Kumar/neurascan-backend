@@ -2,6 +2,7 @@ package com.ai.learningdetection.service;
 
 import com.ai.learningdetection.dto.AnalysisDTOs;
 import com.ai.learningdetection.exception.AiServiceException;
+import com.ai.learningdetection.exception.ImageValidationException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -10,10 +11,13 @@ import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.nio.file.Path;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -64,6 +68,30 @@ public class AiIntegrationService {
             log.error("Cannot reach AI service at {}: {}", aiServiceUrl, ex.getMessage());
             throw new AiServiceException(
                     "AI service is not reachable. Please ensure it is running at " + aiServiceUrl, ex);
+        } catch (HttpClientErrorException ex) {
+            // Handle 400 Bad Request - likely validation error
+            if (ex.getStatusCode() == HttpStatus.BAD_REQUEST) {
+                try {
+                    ObjectMapper mapper = new ObjectMapper();
+                    Map<String, Object> errorBody = mapper.readValue(ex.getResponseBodyAsString(), Map.class);
+
+                    if (Boolean.TRUE.equals(errorBody.get("validation_error"))) {
+                        String reason = (String) errorBody.getOrDefault("reason", "Invalid image");
+                        String message = (String) errorBody.getOrDefault("message",
+                                "Please upload a clear image of handwriting on paper.");
+                        double confidence = errorBody.get("confidence") != null
+                                ? ((Number) errorBody.get("confidence")).doubleValue() : 0.0;
+
+                        log.warn("Image validation failed: {} (confidence: {}%)", reason, confidence);
+                        throw new ImageValidationException(reason, message, confidence);
+                    }
+                } catch (ImageValidationException ive) {
+                    throw ive;
+                } catch (Exception parseEx) {
+                    log.warn("Could not parse validation error response: {}", parseEx.getMessage());
+                }
+            }
+            throw new AiServiceException("AI service returned error: " + ex.getStatusCode(), ex);
         } catch (AiServiceException ex) {
             throw ex;
         } catch (Exception ex) {
