@@ -5,7 +5,7 @@ import com.ai.learningdetection.entity.AnalysisReport;
 import com.ai.learningdetection.entity.TestPaper;
 import com.ai.learningdetection.entity.Student;
 import com.ai.learningdetection.exception.ResourceNotFoundException;
-import com.ai.learningdetection.exception.UnauthorizedAccessException;
+import com.ai.learningdetection.exception.ImageValidationException;
 import com.ai.learningdetection.util.RiskLevelUtil;
 import com.google.cloud.firestore.*;
 import com.google.cloud.Timestamp;
@@ -72,6 +72,11 @@ public class AnalysisService {
             try {
                 // Prefer advanced external AI service route (may include external model integrations).
                 aiResponse = aiIntegrationService.analyzeFileWithExternalModel(filePath);
+            } catch (ImageValidationException ex) {
+                // Don't catch validation errors - let them propagate to GlobalExceptionHandler
+                // This ensures frontend gets proper validation error message
+                log.warn("Image validation failed: {}", ex.getMessage());
+                throw ex;
             } catch (Exception ex) {
                 log.error("AI service failed, using fallback: {}", ex.getMessage());
                 aiResponse = aiIntegrationService.getMockAnalysis();

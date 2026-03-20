@@ -170,6 +170,36 @@ public class AiIntegrationService {
                 return getMockAnalysis();
             }
 
+        } catch (HttpClientErrorException ex) {
+            // Handle 400 Bad Request - validation error from AI service
+            if (ex.getStatusCode() == HttpStatus.BAD_REQUEST) {
+                try {
+                    ObjectMapper mapper = new ObjectMapper();
+                    Map<String, Object> errorBody = mapper.readValue(ex.getResponseBodyAsString(), Map.class);
+
+                    if (Boolean.TRUE.equals(errorBody.get("validation_error"))) {
+                        String reason = (String) errorBody.getOrDefault("reason", "Invalid image");
+                        String message = (String) errorBody.getOrDefault("message",
+                                "Please upload a clear image of handwriting on paper.");
+                        double confidence = errorBody.get("confidence") != null
+                                ? ((Number) errorBody.get("confidence")).doubleValue() : 0.0;
+
+                        log.warn("Image validation failed: {} (confidence: {}%)", reason, confidence);
+                        throw new ImageValidationException(reason, message, confidence);
+                    }
+                } catch (ImageValidationException ive) {
+                    throw ive;
+                } catch (Exception parseEx) {
+                    log.warn("Could not parse validation error response: {}", parseEx.getMessage());
+                }
+            }
+            log.warn("External AI service returned error: {}", ex.getStatusCode());
+            throw new AiServiceException("AI service returned error: " + ex.getStatusCode(), ex);
+        } catch (ResourceAccessException ex) {
+            log.warn("Cannot reach external AI service: {}", ex.getMessage());
+            return getMockAnalysis();
+        } catch (ImageValidationException ex) {
+            throw ex;
         } catch (Exception ex) {
             log.warn("Failed to call external AI analysis endpoint: {}", ex.getMessage());
             return getMockAnalysis();
