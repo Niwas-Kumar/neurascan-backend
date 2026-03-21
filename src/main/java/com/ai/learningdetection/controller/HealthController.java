@@ -16,7 +16,6 @@ import java.util.HashMap;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/v1/health")
 @RequiredArgsConstructor
 public class HealthController {
 
@@ -41,7 +40,12 @@ public class HealthController {
     @Value("${feature.admin.panel.enabled:false}")
     private boolean adminPanelEnabled;
 
-    @GetMapping
+    @GetMapping("/ping")
+    public ResponseEntity<Map<String, String>> ping() {
+        return ResponseEntity.ok(Map.of("status", "UP"));
+    }
+
+    @GetMapping("/api/v1/health")
     public ResponseEntity<ApiResponse<HealthDTO>> getHealth() {
         String dbStatus = "UNKNOWN";
 

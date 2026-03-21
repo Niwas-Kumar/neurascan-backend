@@ -47,7 +47,7 @@ public class SecurityConfig {
             )
             .authorizeHttpRequests(auth -> auth
                 // Public health check endpoints (for deployment platforms like Render)
-                .requestMatchers("/actuator/health", "/health").permitAll()
+                .requestMatchers("/actuator/health", "/health", "/ping").permitAll()
 
                 // Public auth endpoints
                 .requestMatchers("/api/auth/**", "/auth/**").permitAll()
