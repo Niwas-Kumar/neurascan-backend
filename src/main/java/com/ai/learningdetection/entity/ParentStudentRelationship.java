@@ -80,6 +80,14 @@ public class ParentStudentRelationship {
     private transient Boolean active;
     private transient Boolean pending;
 
+    /**
+     * Firestore calls setPrimary() for isPrimary field (Java Beans convention).
+     * Lombok generates setIsPrimary(), so we need this manual setter.
+     */
+    public void setPrimary(boolean primary) {
+        this.isPrimary = primary;
+    }
+
     public void setActive(Boolean active) {
         // Ignored - computed from isActive()
     }
