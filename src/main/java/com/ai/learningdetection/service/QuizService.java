@@ -191,23 +191,30 @@ public class QuizService {
     public List<QuizResponse> getQuizResponsesForStudent(String studentId, String requesterId, String requesterRole) {
         try {
             if ("PARENT".equalsIgnoreCase(requesterRole) || "ROLE_PARENT".equalsIgnoreCase(requesterRole)) {
-                DocumentSnapshot parentDoc = firestore.collection("parents").document(requesterId).get().get();
-                if (!parentDoc.exists()) {
-                    throw new UnauthorizedAccessException("Parent not found");
+                // Check via new parent-student relationship system
+                QuerySnapshot relationshipQuery = firestore.collection("parent_student_relationships")
+                        .whereEqualTo("parentId", requesterId)
+                        .whereEqualTo("studentId", studentId)
+                        .whereEqualTo("verificationStatus", "VERIFIED")
+                        .limit(1)
+                        .get().get();
+
+                boolean hasRelationship = false;
+                if (!relationshipQuery.isEmpty()) {
+                    DocumentSnapshot rel = relationshipQuery.getDocuments().get(0);
+                    hasRelationship = rel.getString("disconnectedAt") == null;
                 }
-                String linkedStudent = parentDoc.getString("studentId");
-                
-                // ✅ IMPROVED: Log for debugging, provide helpful error message if studentId not set
-                System.out.println("[QUIZ_DEBUG] Parent: " + requesterId + " | Linked Student in Firestore: " + linkedStudent + " | Requested Student: " + studentId);
-                
-                if (linkedStudent == null || linkedStudent.isEmpty()) {
-                    System.out.println("[QUIZ_ERROR] Parent " + requesterId + " has no studentId set in Firestore");
-                    throw new UnauthorizedAccessException("STUDENT_ID_NOT_SET|Student ID not set in your profile. Please go to Settings to add your child's student ID.");
-                }
-                
-                if (!studentId.equals(linkedStudent)) {
-                    System.out.println("[QUIZ_ERROR] Mismatch: requested=" + studentId + " vs stored=" + linkedStudent);
-                    throw new UnauthorizedAccessException("You do not have permission to view this student's data.");
+
+                if (!hasRelationship) {
+                    // Fallback: Check legacy parent.studentId field
+                    DocumentSnapshot parentDoc = firestore.collection("parents").document(requesterId).get().get();
+                    if (!parentDoc.exists()) {
+                        throw new UnauthorizedAccessException("Parent not found");
+                    }
+                    String linkedStudent = parentDoc.getString("studentId");
+                    if (linkedStudent == null || !studentId.equals(linkedStudent)) {
+                        throw new UnauthorizedAccessException("You do not have permission to view this student's data. Please connect to this student from your dashboard.");
+                    }
                 }
             } else if ("TEACHER".equals(requesterRole)) {
                 DocumentSnapshot studentDoc = firestore.collection("students").document(studentId).get().get();

@@ -454,28 +454,38 @@ public class AnalysisService {
     }
 
     private void verifyParentOwnsStudent(String parentId, String studentId) throws ExecutionException, InterruptedException {
+        // Check for verified parent-student relationship in the new system
+        QuerySnapshot relationshipQuery = firestore.collection("parent_student_relationships")
+                .whereEqualTo("parentId", parentId)
+                .whereEqualTo("studentId", studentId)
+                .whereEqualTo("verificationStatus", "VERIFIED")
+                .limit(1)
+                .get().get();
+
+        if (!relationshipQuery.isEmpty()) {
+            // Check if not disconnected
+            DocumentSnapshot rel = relationshipQuery.getDocuments().get(0);
+            if (rel.getString("disconnectedAt") == null) {
+                log.debug("Parent {} authorized via relationship system for student {}", parentId, studentId);
+                return; // Authorized via new relationship system
+            }
+        }
+
+        // Fallback: Check legacy parent.studentId field for backward compatibility
         DocumentSnapshot p = firestore.collection(PARENTS_COLLECTION).document(parentId).get().get();
         if (!p.exists()) {
             throw new UnauthorizedAccessException("Parent not found");
         }
-        
-        // Get the stored studentId from parent document
+
         String storedStudentId = p.getString("studentId");
-        
-        // ✅ IMPROVED: More helpful error messages with logging for debugging
-        System.out.println("[ANALYSIS_DEBUG] Parent: " + parentId + " | Stored Student: " + storedStudentId + " | Requested Student: " + studentId);
-        
-        if (storedStudentId == null || storedStudentId.isEmpty()) {
-            // Parent hasn't set up their child's student ID yet
-            System.out.println("[ANALYSIS_ERROR] Parent " + parentId + " has no studentId set in Firestore");
-            throw new UnauthorizedAccessException("STUDENT_ID_NOT_SET|Student ID not set in your profile. Please go to Settings to add your child's student ID.");
+        log.debug("Parent {} legacy studentId: {}, requested: {}", parentId, storedStudentId, studentId);
+
+        if (storedStudentId != null && studentId.equals(storedStudentId)) {
+            return; // Authorized via legacy system
         }
-        
-        if (!studentId.equals(storedStudentId)) {
-            // Parent trying to view a different student's data
-            System.out.println("[ANALYSIS_ERROR] Mismatch: requested=" + studentId + " vs stored=" + storedStudentId);
-            throw new UnauthorizedAccessException("You do not have permission to view this student's data.");
-        }
+
+        // No authorization found
+        throw new UnauthorizedAccessException("You do not have permission to view this student's data. Please connect to this student from your dashboard.");
     }
 
     private String calculateTrend(List<AnalysisReport> reports) {

@@ -342,21 +342,30 @@ public class QuizAttemptService {
         try {
             // Validate access
             if ("PARENT".equalsIgnoreCase(requesterRole) || "ROLE_PARENT".equalsIgnoreCase(requesterRole)) {
-                DocumentSnapshot parentDoc = firestore.collection("parents").document(requesterId).get().get();
-                if (!parentDoc.exists()) {
-                    throw new RuntimeException("Parent not found");
+                // Check via new parent-student relationship system
+                QuerySnapshot relationshipQuery = firestore.collection("parent_student_relationships")
+                        .whereEqualTo("parentId", requesterId)
+                        .whereEqualTo("studentId", studentId)
+                        .whereEqualTo("verificationStatus", "VERIFIED")
+                        .limit(1)
+                        .get().get();
+
+                boolean hasRelationship = false;
+                if (!relationshipQuery.isEmpty()) {
+                    DocumentSnapshot rel = relationshipQuery.getDocuments().get(0);
+                    hasRelationship = rel.getString("disconnectedAt") == null;
                 }
-                String linkedStudent = parentDoc.getString("studentId");
 
-                log.info("[QUIZ_ATTEMPTS] Parent: {} | Linked Student: {} | Requested: {}",
-                        requesterId, linkedStudent, studentId);
-
-                if (linkedStudent == null || linkedStudent.isEmpty()) {
-                    throw new RuntimeException("STUDENT_ID_NOT_SET|Student ID not set in your profile. Please go to Settings to add your child's student ID.");
-                }
-
-                if (!studentId.equals(linkedStudent)) {
-                    throw new RuntimeException("You do not have permission to view this student's data.");
+                if (!hasRelationship) {
+                    // Fallback: Check legacy parent.studentId field
+                    DocumentSnapshot parentDoc = firestore.collection("parents").document(requesterId).get().get();
+                    if (!parentDoc.exists()) {
+                        throw new RuntimeException("Parent not found");
+                    }
+                    String linkedStudent = parentDoc.getString("studentId");
+                    if (linkedStudent == null || !studentId.equals(linkedStudent)) {
+                        throw new RuntimeException("You do not have permission to view this student's data. Please connect to this student from your dashboard.");
+                    }
                 }
             } else if ("TEACHER".equalsIgnoreCase(requesterRole) || "ROLE_TEACHER".equalsIgnoreCase(requesterRole)) {
                 // Teacher can view any of their students

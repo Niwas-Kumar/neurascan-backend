@@ -75,6 +75,19 @@ public class ParentStudentRelationship {
     private String studentClassName;
     private String studentRollNumber;
 
+    // Firestore computed fields (stored in doc but computed dynamically)
+    // These setters exist to prevent Firestore mapping warnings
+    private transient Boolean active;
+    private transient Boolean pending;
+
+    public void setActive(Boolean active) {
+        // Ignored - computed from isActive()
+    }
+
+    public void setPending(Boolean pending) {
+        // Ignored - computed from isPending()
+    }
+
     /**
      * Check if the relationship is currently active.
      */
