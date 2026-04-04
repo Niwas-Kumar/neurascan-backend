@@ -28,12 +28,30 @@ public class ClassService {
 
     public ClassDTOs.ClassResponse createClass(ClassDTOs.ClassCreateRequest request) {
         try {
+            String normalizedClassName = normalizeClassName(request.getClassName());
+            if (normalizedClassName == null) {
+                throw new IllegalArgumentException("Class name is required");
+            }
+
+            QuerySnapshot existingClasses = firestore.collection(CLASSES_COLLECTION)
+                    .whereEqualTo("teacherId", request.getTeacherId())
+                    .get().get();
+
+            boolean duplicateExists = existingClasses.getDocuments().stream()
+                    .map(doc -> doc.toObject(ClassRoom.class))
+                    .filter(c -> c != null && c.isActive())
+                    .anyMatch(c -> normalizedClassName.equalsIgnoreCase(String.valueOf(c.getClassName()).trim()));
+
+            if (duplicateExists) {
+                throw new IllegalArgumentException("Class already exists: " + normalizedClassName);
+            }
+
             DocumentReference docRef = firestore.collection(CLASSES_COLLECTION).document();
             String now = java.time.Instant.now().toString();
 
             ClassRoom classRoom = ClassRoom.builder()
                     .id(docRef.getId())
-                    .className(request.getClassName())
+                    .className(normalizedClassName)
                     .section(request.getSection())
                     .academicYear(request.getAcademicYear())
                     .subject(request.getSubject())
@@ -71,14 +89,14 @@ public class ClassService {
     public List<ClassDTOs.ClassResponse> getClassesByTeacher(String teacherId) {
         try {
             // Build class summaries from active students to guarantee accurate counts.
-            QuerySnapshot query = firestore.collection(STUDENTS_COLLECTION)
+            QuerySnapshot studentQuery = firestore.collection(STUDENTS_COLLECTION)
                     .whereEqualTo("teacherId", teacherId)
                     .get().get();
 
             Map<String, List<String>> classToStudentIds = new HashMap<>();
             Map<String, String> classToSchoolId = new HashMap<>();
 
-            for (DocumentSnapshot doc : query.getDocuments()) {
+            for (DocumentSnapshot doc : studentQuery.getDocuments()) {
                 Student student = doc.toObject(Student.class);
                 if (student == null || !student.isActive()) {
                     continue;
@@ -98,13 +116,51 @@ public class ClassService {
                 }
             }
 
-            List<ClassDTOs.ClassResponse> list = new ArrayList<>();
+            QuerySnapshot classQuery = firestore.collection(CLASSES_COLLECTION)
+                    .whereEqualTo("teacherId", teacherId)
+                    .get().get();
+
+            Map<String, ClassDTOs.ClassResponse> classSummaries = new HashMap<>();
+
+            for (DocumentSnapshot doc : classQuery.getDocuments()) {
+                ClassRoom classRoom = doc.toObject(ClassRoom.class);
+                if (classRoom == null || !classRoom.isActive()) {
+                    continue;
+                }
+
+                String className = normalizeClassName(classRoom.getClassName());
+                if (className == null) {
+                    continue;
+                }
+
+                List<String> studentIds = classToStudentIds.getOrDefault(className, new ArrayList<>());
+
+                classSummaries.put(className, ClassDTOs.ClassResponse.builder()
+                        // Use className as id to support /classes/:classId/students drill-down.
+                        .id(className)
+                        .className(className)
+                        .section(classRoom.getSection())
+                        .academicYear(classRoom.getAcademicYear())
+                        .subject(classRoom.getSubject())
+                        .schoolId(classRoom.getSchoolId() != null ? classRoom.getSchoolId() : classToSchoolId.get(className))
+                        .teacherId(teacherId)
+                        .studentIds(studentIds)
+                        .isActive(true)
+                        .createdAt(classRoom.getCreatedAt())
+                        .updatedAt(classRoom.getUpdatedAt())
+                        .studentCount(studentIds.size())
+                        .build());
+            }
+
             for (Map.Entry<String, List<String>> entry : classToStudentIds.entrySet()) {
                 String className = entry.getKey();
                 List<String> studentIds = entry.getValue();
 
-                list.add(ClassDTOs.ClassResponse.builder()
-                        // Use className as id to support /classes/:classId/students drill-down.
+                if (classSummaries.containsKey(className)) {
+                    continue;
+                }
+
+                classSummaries.put(className, ClassDTOs.ClassResponse.builder()
                         .id(className)
                         .className(className)
                         .section(null)
@@ -119,6 +175,8 @@ public class ClassService {
                         .studentCount(studentIds.size())
                         .build());
             }
+
+            List<ClassDTOs.ClassResponse> list = new ArrayList<>(classSummaries.values());
 
             list.sort(Comparator.comparing(ClassDTOs.ClassResponse::getClassName, String.CASE_INSENSITIVE_ORDER));
             return list;

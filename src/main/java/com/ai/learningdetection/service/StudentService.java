@@ -29,6 +29,22 @@ public class StudentService {
     private static final String TEACHERS_COLLECTION = "teachers";
     private static final String PAPERS_COLLECTION = "test_papers";
 
+    private String normalizeClassKey(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.trim().replaceAll("\\s+", " ").toLowerCase();
+    }
+
+    private String normalizeRollKey(String value) {
+        if (value == null) {
+            return "";
+        }
+
+        String normalized = value.trim().replaceFirst("^#+", "").replaceAll("\\s+", "");
+        return normalized.toLowerCase();
+    }
+
     // -------------------------------------------------------
     // Get all students for a teacher (OPTIMIZED - batched queries)
     // NOTE: Uses single-field query to avoid composite index delays
@@ -161,6 +177,29 @@ public class StudentService {
         return cache;
     }
 
+    private void validateUniqueRollNumberInClass(String teacherId,
+                                                 String className,
+                                                 String rollNumber,
+                                                 String excludeStudentId) throws ExecutionException, InterruptedException {
+        String classKey = normalizeClassKey(className);
+        String rollKey = normalizeRollKey(rollNumber);
+
+        QuerySnapshot teacherStudents = firestore.collection(STUDENTS_COLLECTION)
+                .whereEqualTo("teacherId", teacherId)
+                .get().get();
+
+        boolean duplicateExists = teacherStudents.getDocuments().stream()
+                .map(doc -> doc.toObject(Student.class))
+                .filter(s -> s != null && s.isActive())
+                .filter(s -> excludeStudentId == null || !excludeStudentId.equals(s.getId()))
+                .anyMatch(s -> classKey.equals(normalizeClassKey(s.getClassName()))
+                        && rollKey.equals(normalizeRollKey(s.getRollNumber())));
+
+        if (duplicateExists) {
+            throw new IllegalArgumentException("Roll No already exists in class " + className);
+        }
+    }
+
     // -------------------------------------------------------
     // Create a new student
     // -------------------------------------------------------
@@ -195,22 +234,17 @@ public class StudentService {
                 log.warn("Teacher {} creating student without school assignment (using default: {})", teacherId, schoolId);
             }
 
-            QuerySnapshot existingRoll = firestore.collection(STUDENTS_COLLECTION)
-                    .whereEqualTo("rollNumber", request.getRollNumber())
-                    .whereEqualTo("schoolId", schoolId)
-                    .get().get();
-
-            if (!existingRoll.isEmpty()) {
-                throw new IllegalArgumentException("Roll number already exists in this school");
-            }
+                String normalizedClassName = request.getClassName() == null ? "" : request.getClassName().trim();
+                String normalizedRollNumber = request.getRollNumber() == null ? "" : request.getRollNumber().trim();
+                validateUniqueRollNumberInClass(teacherId, normalizedClassName, normalizedRollNumber, null);
 
             DocumentReference docRef = firestore.collection(STUDENTS_COLLECTION).document();
             String now = java.time.Instant.now().toString();
             Student student = Student.builder()
                     .id(docRef.getId())
-                    .rollNumber(request.getRollNumber())
+                    .rollNumber(normalizedRollNumber)
                     .name(request.getName())
-                    .className(request.getClassName())
+                    .className(normalizedClassName)
                     .section(request.getSection())
                     .age(request.getAge())
                     .dateOfBirth(request.getDateOfBirth())
@@ -248,10 +282,14 @@ public class StudentService {
                 throw new ResourceNotFoundException("Student", "id", studentId);
             }
 
+            String normalizedClassName = request.getClassName() == null ? "" : request.getClassName().trim();
+            String normalizedRollNumber = request.getRollNumber() == null ? "" : request.getRollNumber().trim();
+            validateUniqueRollNumberInClass(teacherId, normalizedClassName, normalizedRollNumber, studentId);
+
             Student student = snap.toObject(Student.class);
-            student.setRollNumber(request.getRollNumber());
+            student.setRollNumber(normalizedRollNumber);
             student.setName(request.getName());
-            student.setClassName(request.getClassName());
+            student.setClassName(normalizedClassName);
             student.setSection(request.getSection());
             student.setAge(request.getAge());
             student.setDateOfBirth(request.getDateOfBirth());
