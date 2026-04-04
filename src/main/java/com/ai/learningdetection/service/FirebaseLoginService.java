@@ -140,7 +140,7 @@ public class FirebaseLoginService {
                         .email(email)
                         .name(name)
                         .password("")
-                        .studentId("")
+                    // Parent-student linkage is handled via verified relationship records.
                         .schoolId("")
                         .picture(picture)
                         .emailVerified(true)
