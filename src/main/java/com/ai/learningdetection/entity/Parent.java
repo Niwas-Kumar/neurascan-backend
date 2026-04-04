@@ -1,5 +1,6 @@
 package com.ai.learningdetection.entity;
 
+import com.google.cloud.firestore.annotation.IgnoreExtraProperties;
 import lombok.*;
 
 @Getter
@@ -7,6 +8,7 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@IgnoreExtraProperties
 public class Parent {
 
     private String id;
@@ -18,6 +20,11 @@ public class Parent {
 
     @Builder.Default
     private boolean emailVerified = false;  // Default value for new parents
+
+    // Legacy Firestore compatibility: old parent docs may still contain `studentId`.
+    public void setStudentId(String ignoredStudentId) {
+        // Intentionally no-op: parent-student linkage is now managed by relationship records.
+    }
 }
 
 

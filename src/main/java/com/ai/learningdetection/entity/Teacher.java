@@ -1,5 +1,6 @@
 package com.ai.learningdetection.entity;
 
+import com.google.cloud.firestore.annotation.IgnoreExtraProperties;
 import lombok.*;
 
 @Getter
@@ -7,6 +8,7 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@IgnoreExtraProperties
 public class Teacher {
 
     private String id;
@@ -20,5 +22,12 @@ public class Teacher {
     
     @Builder.Default
     private boolean emailVerified = false;  // Default value for new teachers
+
+    // Legacy Firestore compatibility: some old documents still use `school`.
+    public void setSchool(String school) {
+        if ((this.schoolId == null || this.schoolId.isBlank()) && school != null && !school.isBlank()) {
+            this.schoolId = school;
+        }
+    }
 }
 

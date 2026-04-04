@@ -1,6 +1,7 @@
 package com.ai.learningdetection.entity;
 
 import com.google.cloud.firestore.annotation.Exclude;
+import com.google.cloud.firestore.annotation.IgnoreExtraProperties;
 import lombok.*;
 
 /**
@@ -15,6 +16,7 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@IgnoreExtraProperties
 public class ParentStudentRelationship {
 
     private String id;
@@ -89,6 +91,19 @@ public class ParentStudentRelationship {
      */
     public void setIsPrimary(Boolean isPrimary) {
         this.primary = isPrimary != null && isPrimary;
+    }
+
+    public void setIsPrimary(boolean isPrimary) {
+        this.primary = isPrimary;
+    }
+
+    // Legacy compatibility: older docs may contain boolean helpers `pending`/`active`.
+    public void setPending(Boolean ignoredPending) {
+        // Intentionally ignored. Canonical source is verificationStatus.
+    }
+
+    public void setActive(Boolean ignoredActive) {
+        // Intentionally ignored. Canonical source is verificationStatus + disconnectedAt.
     }
 
     // ═══════════════════════════════════════════════════════════════════

@@ -6,6 +6,7 @@ import com.ai.learningdetection.entity.Teacher;
 import com.ai.learningdetection.security.IdentifiablePrincipal;
 import com.ai.learningdetection.util.JwtUtil;
 import com.google.cloud.firestore.DocumentSnapshot;
+import com.google.cloud.firestore.FieldValue;
 import com.google.cloud.firestore.Firestore;
 import com.google.cloud.firestore.QuerySnapshot;
 import jakarta.validation.Valid;
@@ -80,6 +81,14 @@ public class ProfileController {
                 .anyMatch(a -> a.getAuthority().equals("ROLE_TEACHER"));
     }
 
+    private String resolveSchool(DocumentSnapshot doc) {
+        String schoolId = doc.getString("schoolId");
+        if (schoolId != null && !schoolId.isBlank()) {
+            return schoolId;
+        }
+        return doc.getString("school");
+    }
+
     // ── Endpoints ────────────────────────────────────────────
 
     /**
@@ -108,7 +117,7 @@ public class ProfileController {
                 .name(name)
                 .email(email)
                 .role(role)
-                .school(doc.getString("school"))
+                .school(resolveSchool(doc))
             .studentId(teacher ? null : resolvePrimaryStudentId(principal.getId()))
                 .picture(doc.getString("picture"))
                 .jwtToken(jwtUtil.generateToken(email, role, doc.getId(), name, doc.getString("picture")))
@@ -133,9 +142,11 @@ public class ProfileController {
         // Update the name
         firestore.collection(collection).document(principal.getId()).update("name", request.getName()).get();
 
-        // If teacher, also update school
+        // If teacher, update canonical schoolId and remove legacy school field.
         if (teacher && request.getSchool() != null) {
-            firestore.collection(collection).document(principal.getId()).update("school", request.getSchool()).get();
+            firestore.collection(collection).document(principal.getId())
+                    .update("schoolId", request.getSchool(), "school", FieldValue.delete())
+                    .get();
         }
         
         // Fetch and return the updated profile
@@ -153,7 +164,7 @@ public class ProfileController {
                 .name(name)
                 .email(email)
                 .role(role)
-                .school(doc.getString("school"))
+                .school(resolveSchool(doc))
             .studentId(teacher ? null : resolvePrimaryStudentId(principal.getId()))
                 .picture(doc.getString("picture"))
                 .jwtToken(jwtUtil.generateToken(email, role, doc.getId(), name, doc.getString("picture")))
