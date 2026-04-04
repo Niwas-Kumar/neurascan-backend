@@ -31,11 +31,16 @@ public class StudentController {
             @AuthenticationPrincipal IdentifiablePrincipal principal,
             @RequestParam(required = false) String search,
             @RequestParam(required = false) String className,
+            @RequestParam(required = false) String classId,
             @RequestParam(required = false) String tag,
             @RequestParam(required = false) String rollNumber) {
 
+        // Backward-compatible alias: classId maps to className filter for drill-down routes.
+        String effectiveClassFilter =
+                (classId != null && !classId.isBlank()) ? classId : className;
+
         List<StudentDTOs.StudentResponse> students =
-                studentService.getStudentsByTeacher(principal.getId(), search, className, tag, rollNumber);
+                studentService.getStudentsByTeacher(principal.getId(), search, effectiveClassFilter, tag, rollNumber);
         return ResponseEntity.ok(
                 ApiResponse.success(students, "Students retrieved successfully"));
     }

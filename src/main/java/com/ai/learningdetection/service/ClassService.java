@@ -10,7 +10,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
 @Service
@@ -67,19 +70,69 @@ public class ClassService {
 
     public List<ClassDTOs.ClassResponse> getClassesByTeacher(String teacherId) {
         try {
-            QuerySnapshot query = firestore.collection(CLASSES_COLLECTION)
+            // Build class summaries from active students to guarantee accurate counts.
+            QuerySnapshot query = firestore.collection(STUDENTS_COLLECTION)
                     .whereEqualTo("teacherId", teacherId)
-                    .whereEqualTo("isActive", true)
                     .get().get();
-            List<ClassDTOs.ClassResponse> list = new ArrayList<>();
+
+            Map<String, List<String>> classToStudentIds = new HashMap<>();
+            Map<String, String> classToSchoolId = new HashMap<>();
+
             for (DocumentSnapshot doc : query.getDocuments()) {
-                ClassRoom classRoom = doc.toObject(ClassRoom.class);
-                if (classRoom != null) list.add(toResponse(classRoom));
+                Student student = doc.toObject(Student.class);
+                if (student == null || !student.isActive()) {
+                    continue;
+                }
+
+                String className = normalizeClassName(student.getClassName());
+                if (className == null) {
+                    continue;
+                }
+
+                classToStudentIds
+                        .computeIfAbsent(className, key -> new ArrayList<>())
+                        .add(student.getId());
+
+                if (!classToSchoolId.containsKey(className)) {
+                    classToSchoolId.put(className, student.getSchoolId());
+                }
             }
+
+            List<ClassDTOs.ClassResponse> list = new ArrayList<>();
+            for (Map.Entry<String, List<String>> entry : classToStudentIds.entrySet()) {
+                String className = entry.getKey();
+                List<String> studentIds = entry.getValue();
+
+                list.add(ClassDTOs.ClassResponse.builder()
+                        // Use className as id to support /classes/:classId/students drill-down.
+                        .id(className)
+                        .className(className)
+                        .section(null)
+                        .academicYear(null)
+                        .subject(null)
+                        .schoolId(classToSchoolId.get(className))
+                        .teacherId(teacherId)
+                        .studentIds(studentIds)
+                        .isActive(true)
+                        .createdAt(null)
+                        .updatedAt(null)
+                        .studentCount(studentIds.size())
+                        .build());
+            }
+
+            list.sort(Comparator.comparing(ClassDTOs.ClassResponse::getClassName, String.CASE_INSENSITIVE_ORDER));
             return list;
         } catch (InterruptedException | ExecutionException e) {
             throw new RuntimeException("Firestore error fetching classes", e);
         }
+    }
+
+    private String normalizeClassName(String className) {
+        if (className == null) {
+            return null;
+        }
+        String trimmed = className.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     public ClassDTOs.ClassResponse updateClass(String classId, ClassDTOs.ClassCreateRequest request, String teacherId) {
