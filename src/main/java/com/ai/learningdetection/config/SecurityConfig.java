@@ -102,6 +102,8 @@ public class SecurityConfig {
         configuration.setAllowedHeaders(java.util.List.of("*"));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);
+        // Expose X-New-Token header for automatic token refresh
+        configuration.setExposedHeaders(java.util.List.of("X-New-Token"));
 
         org.springframework.web.cors.UrlBasedCorsConfigurationSource source =
                 new org.springframework.web.cors.UrlBasedCorsConfigurationSource();

@@ -24,6 +24,9 @@ public class JwtUtil {
     @Value("${jwt.expiration}")
     private long jwtExpiration;
 
+    @Value("${jwt.refresh-threshold}")
+    private long jwtRefreshThreshold;
+
     // -------------------------------------------------------
     // Token Generation
     // -------------------------------------------------------
@@ -70,6 +73,39 @@ public class JwtUtil {
 
     private boolean isTokenExpired(String token) {
         return extractExpiration(token).before(new Date());
+    }
+
+    /**
+     * Check if token should be refreshed (less than threshold time remaining).
+     * Returns true if token is still valid but should be refreshed.
+     */
+    public boolean shouldRefreshToken(String token) {
+        try {
+            Date expiration = extractExpiration(token);
+            long timeRemaining = expiration.getTime() - System.currentTimeMillis();
+            return timeRemaining > 0 && timeRemaining < jwtRefreshThreshold;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * Refresh token by issuing a new one with same claims but new expiration.
+     */
+    public String refreshToken(String oldToken) {
+        try {
+            Claims claims = extractAllClaims(oldToken);
+            String email = claims.getSubject();
+            String role = claims.get("role", String.class);
+            String userId = claims.get("userId", String.class);
+            String name = claims.get("name", String.class);
+            String picture = claims.get("picture", String.class);
+
+            return generateToken(email, role, userId, name, picture);
+        } catch (Exception e) {
+            log.error("Failed to refresh token: {}", e.getMessage());
+            return null;
+        }
     }
 
     // -------------------------------------------------------

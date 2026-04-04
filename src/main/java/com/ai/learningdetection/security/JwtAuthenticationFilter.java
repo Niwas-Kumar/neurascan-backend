@@ -66,6 +66,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                             new WebAuthenticationDetailsSource().buildDetails(request)
                     );
                     SecurityContextHolder.getContext().setAuthentication(authToken);
+
+                    // Auto-refresh token if it's close to expiration
+                    if (jwtUtil.shouldRefreshToken(jwt)) {
+                        String refreshedToken = jwtUtil.refreshToken(jwt);
+                        if (refreshedToken != null) {
+                            response.setHeader("X-New-Token", refreshedToken);
+                            log.debug("Token auto-refreshed for user: {}", userEmail);
+                        }
+                    }
                 }
             }
         } catch (Exception e) {
