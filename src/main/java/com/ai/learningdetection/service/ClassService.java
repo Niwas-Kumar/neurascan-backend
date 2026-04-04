@@ -37,7 +37,7 @@ public class ClassService {
                     .schoolId(request.getSchoolId())
                     .teacherId(request.getTeacherId())
                     .studentIds(request.getStudentIds() == null ? new ArrayList<>() : request.getStudentIds())
-                    .isActive(true)
+                    .active(true)
                     .createdAt(now)
                     .updatedAt(now)
                     .build();

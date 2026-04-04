@@ -219,7 +219,7 @@ public class StudentService {
                     .teacherId(teacherId)
                     .parentUid(request.getParentUid())
                     .profilePhotoUrl(request.getProfilePhotoUrl())
-                    .isActive(true)
+                    .active(true)
                     .tags(request.getTags() == null ? java.util.Collections.emptyList() : request.getTags())
                     .createdAt(now)
                     .updatedAt(now)

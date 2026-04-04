@@ -19,7 +19,22 @@ public class ClassRoom {
     private String teacherId;
     private List<String> studentIds;
     @Builder.Default
-    private boolean isActive = true;  // Default to true
+    private boolean active = true;  // Renamed from 'isActive' to avoid Lombok getter collision
+
     private String createdAt;
     private String updatedAt;
+
+    /**
+     * Firestore compatibility: accepts "isActive" field from existing documents.
+     */
+    public void setIsActive(Boolean isActive) {
+        this.active = isActive != null && isActive;
+    }
+
+    /**
+     * Convenience method to check active status.
+     */
+    public boolean isActive() {
+        return active;
+    }
 }
