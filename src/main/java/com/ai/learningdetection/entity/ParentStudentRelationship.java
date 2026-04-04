@@ -78,26 +78,10 @@ public class ParentStudentRelationship {
     private String studentRollNumber;
 
     // ═══════════════════════════════════════════════════════════════════
-    // FIRESTORE COMPATIBILITY SETTERS
-    // These exist because Firestore documents have "active", "pending",
-    // "isPrimary" fields that need setters when deserializing.
+    // FIRESTORE COMPATIBILITY
+    // These handle "active", "pending", "isPrimary" fields from Firestore
+    // documents without creating conflicting getters.
     // ═══════════════════════════════════════════════════════════════════
-
-    /**
-     * Firestore compatibility: accepts "active" field from document.
-     * Value is ignored - we compute this from verificationStatus.
-     */
-    public void setActive(Boolean active) {
-        // Ignored - computed by isActive()
-    }
-
-    /**
-     * Firestore compatibility: accepts "pending" field from document.
-     * Value is ignored - we compute this from verificationStatus.
-     */
-    public void setPending(Boolean pending) {
-        // Ignored - computed by isPending()
-    }
 
     /**
      * Firestore compatibility: accepts "isPrimary" field from document.
@@ -114,17 +98,19 @@ public class ParentStudentRelationship {
 
     /**
      * Check if the relationship is currently active (verified and not disconnected).
+     * Named checkActive() to avoid conflicting with Firestore "active" property.
      */
     @Exclude
-    public boolean isActive() {
+    public boolean checkActive() {
         return disconnectedAt == null && "VERIFIED".equals(verificationStatus);
     }
 
     /**
      * Check if verification is still pending.
+     * Named checkPending() to avoid conflicting with Firestore "pending" property.
      */
     @Exclude
-    public boolean isPending() {
+    public boolean checkPending() {
         return "PENDING".equals(verificationStatus);
     }
 
