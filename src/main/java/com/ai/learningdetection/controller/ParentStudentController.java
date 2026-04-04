@@ -9,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -72,9 +73,9 @@ public class ParentStudentController {
             Authentication auth,
             HttpServletRequest httpRequest
     ) {
-        IdentifiablePrincipal principal = (IdentifiablePrincipal) auth.getPrincipal();
-        String parentId = principal.getId();
-        String parentEmail = principal.getUsername(); // email is stored as username
+        Object principal = auth.getPrincipal();
+        String parentId = ((IdentifiablePrincipal) principal).getId();
+        String parentEmail = ((UserDetails) principal).getUsername(); // email is stored as username
 
         String ipAddress = getClientIp(httpRequest);
         log.info("Parent {} initiating connection to student {} from IP {}", parentId, request.getStudentId(), ipAddress);
@@ -109,9 +110,9 @@ public class ParentStudentController {
             @RequestBody VerifyConnectionRequest request,
             Authentication auth
     ) {
-        IdentifiablePrincipal principal = (IdentifiablePrincipal) auth.getPrincipal();
-        String parentId = principal.getId();
-        String parentEmail = principal.getUsername();
+        Object principal = auth.getPrincipal();
+        String parentId = ((IdentifiablePrincipal) principal).getId();
+        String parentEmail = ((UserDetails) principal).getUsername();
 
         log.info("Parent {} verifying connection {}", parentId, request.getRelationshipId());
 
@@ -243,9 +244,9 @@ public class ParentStudentController {
             @PathVariable String relationshipId,
             Authentication auth
     ) {
-        IdentifiablePrincipal principal = (IdentifiablePrincipal) auth.getPrincipal();
-        String parentId = principal.getId();
-        String parentEmail = principal.getUsername();
+        Object principal = auth.getPrincipal();
+        String parentId = ((IdentifiablePrincipal) principal).getId();
+        String parentEmail = ((UserDetails) principal).getUsername();
 
         log.info("Parent {} resending OTP for relationship {}", parentId, relationshipId);
 
