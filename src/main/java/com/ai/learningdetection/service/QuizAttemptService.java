@@ -6,6 +6,7 @@ import com.ai.learningdetection.entity.Quiz;
 import com.ai.learningdetection.entity.QuizAttempt;
 import com.ai.learningdetection.entity.QuizLink;
 import com.ai.learningdetection.exception.ResourceNotFoundException;
+import com.ai.learningdetection.exception.UnauthorizedAccessException;
 import com.google.cloud.firestore.DocumentReference;
 import com.google.cloud.firestore.DocumentSnapshot;
 import com.google.cloud.firestore.Firestore;
@@ -109,20 +110,33 @@ public class QuizAttemptService {
      * Submit a response to a single quiz question.
      * Tracks response time and evaluates correctness.
      */
-    public QuizDTOs.QuestionResponseDetail submitQuestionResponse(
+        public QuizDTOs.QuestionResponseDetail submitQuestionResponse(
             String quizAttemptId,
             QuizDTOs.QuestionResponseRequest request) throws ExecutionException, InterruptedException {
+            return submitQuestionResponse(quizAttemptId, request, null, null, null);
+        }
+
+        public QuizDTOs.QuestionResponseDetail submitQuestionResponse(
+            String quizAttemptId,
+            QuizDTOs.QuestionResponseRequest request,
+            String requesterId,
+            String requesterRole) throws ExecutionException, InterruptedException {
+            return submitQuestionResponse(quizAttemptId, request, requesterId, requesterRole, null);
+            }
+
+            public QuizDTOs.QuestionResponseDetail submitQuestionResponse(
+                String quizAttemptId,
+                QuizDTOs.QuestionResponseRequest request,
+                String requesterId,
+                String requesterRole,
+                String accessToken) throws ExecutionException, InterruptedException {
         
         try {
-            // Get quiz attempt
-            DocumentSnapshot attemptSnap = firestore.collection(QUIZ_ATTEMPTS_COLLECTION)
-                    .document(quizAttemptId).get().get();
-            
-            if (!attemptSnap.exists()) {
-                throw new ResourceNotFoundException("QuizAttempt", "id", quizAttemptId);
+            QuizAttempt attempt = assertRequesterCanAccessAttempt(quizAttemptId, requesterId, requesterRole, accessToken);
+
+            if (attempt.isCompleted()) {
+                throw new IllegalStateException("Quiz attempt is already completed");
             }
-            
-            QuizAttempt attempt = attemptSnap.toObject(QuizAttempt.class);
             
             // Get quiz to find correct answer
             DocumentSnapshot quizSnap = firestore.collection(QUIZZES_COLLECTION)
@@ -198,19 +212,32 @@ public class QuizAttemptService {
      * Complete the quiz attempt and calculate results.
      * Triggers AI analysis if enabled.
      */
-    public QuizDTOs.QuizAttemptDetail completeQuizAttempt(String quizAttemptId) 
+        public QuizDTOs.QuizAttemptDetail completeQuizAttempt(String quizAttemptId)
+            throws ExecutionException, InterruptedException {
+            return completeQuizAttempt(quizAttemptId, null, null, null);
+        }
+
+        public QuizDTOs.QuizAttemptDetail completeQuizAttempt(
+            String quizAttemptId,
+            String requesterId,
+            String requesterRole)
+                throws ExecutionException, InterruptedException {
+            return completeQuizAttempt(quizAttemptId, requesterId, requesterRole, null);
+        }
+
+        public QuizDTOs.QuizAttemptDetail completeQuizAttempt(
+                String quizAttemptId,
+                String requesterId,
+                String requesterRole,
+                String accessToken)
             throws ExecutionException, InterruptedException {
         
         try {
-            // Get quiz attempt
-            DocumentSnapshot attemptSnap = firestore.collection(QUIZ_ATTEMPTS_COLLECTION)
-                    .document(quizAttemptId).get().get();
-            
-            if (!attemptSnap.exists()) {
-                throw new ResourceNotFoundException("QuizAttempt", "id", quizAttemptId);
+            QuizAttempt attempt = assertRequesterCanAccessAttempt(quizAttemptId, requesterId, requesterRole, accessToken);
+
+            if (attempt.isCompleted()) {
+                return convertToAttemptDetail(attempt);
             }
-            
-            QuizAttempt attempt = attemptSnap.toObject(QuizAttempt.class);
             
             // Calculate final score
             double score = attempt.getTotalQuestions() > 0 
@@ -246,18 +273,28 @@ public class QuizAttemptService {
     /**
      * Get quiz attempt details including all question responses.
      */
-    public QuizDTOs.QuizAttemptDetail getQuizAttemptDetail(String quizAttemptId) 
+        public QuizDTOs.QuizAttemptDetail getQuizAttemptDetail(String quizAttemptId)
+            throws ExecutionException, InterruptedException {
+            return getQuizAttemptDetail(quizAttemptId, null, null, null);
+        }
+
+        public QuizDTOs.QuizAttemptDetail getQuizAttemptDetail(
+            String quizAttemptId,
+            String requesterId,
+            String requesterRole)
+                throws ExecutionException, InterruptedException {
+            return getQuizAttemptDetail(quizAttemptId, requesterId, requesterRole, null);
+        }
+
+        public QuizDTOs.QuizAttemptDetail getQuizAttemptDetail(
+                String quizAttemptId,
+                String requesterId,
+                String requesterRole,
+                String accessToken)
             throws ExecutionException, InterruptedException {
         
         try {
-            DocumentSnapshot attemptSnap = firestore.collection(QUIZ_ATTEMPTS_COLLECTION)
-                    .document(quizAttemptId).get().get();
-            
-            if (!attemptSnap.exists()) {
-                throw new ResourceNotFoundException("QuizAttempt", "id", quizAttemptId);
-            }
-            
-            QuizAttempt attempt = attemptSnap.toObject(QuizAttempt.class);
+            QuizAttempt attempt = assertRequesterCanAccessAttempt(quizAttemptId, requesterId, requesterRole, accessToken);
             
             // Fetch all question responses
             List<QuizDTOs.QuestionResponseDetail> responses = new ArrayList<>();
@@ -311,10 +348,16 @@ public class QuizAttemptService {
     /**
      * Get all attempts for a student for a specific quiz.
      */
-    public List<QuizDTOs.QuizAttemptDetail> getStudentQuizAttempts(String studentId, String quizId)
+        public List<QuizDTOs.QuizAttemptDetail> getStudentQuizAttempts(
+            String studentId,
+            String quizId,
+            String requesterId,
+            String requesterRole)
             throws ExecutionException, InterruptedException {
 
         try {
+            assertRequesterCanAccessStudent(studentId, requesterId, requesterRole);
+
             QuerySnapshot snapshot = firestore.collection(QUIZ_ATTEMPTS_COLLECTION)
                     .whereEqualTo("studentId", studentId)
                     .whereEqualTo("quizId", quizId)
@@ -340,42 +383,7 @@ public class QuizAttemptService {
             throws ExecutionException, InterruptedException {
 
         try {
-            // Validate access
-            if ("PARENT".equalsIgnoreCase(requesterRole) || "ROLE_PARENT".equalsIgnoreCase(requesterRole)) {
-                // Check via new parent-student relationship system
-                QuerySnapshot relationshipQuery = firestore.collection("parent_student_relationships")
-                        .whereEqualTo("parentId", requesterId)
-                        .whereEqualTo("studentId", studentId)
-                        .whereEqualTo("verificationStatus", "VERIFIED")
-                        .limit(1)
-                        .get().get();
-
-                boolean hasRelationship = false;
-                if (!relationshipQuery.isEmpty()) {
-                    DocumentSnapshot rel = relationshipQuery.getDocuments().get(0);
-                    hasRelationship = rel.getString("disconnectedAt") == null;
-                }
-
-                if (!hasRelationship) {
-                    // Fallback: Check legacy parent.studentId field
-                    DocumentSnapshot parentDoc = firestore.collection("parents").document(requesterId).get().get();
-                    if (!parentDoc.exists()) {
-                        throw new RuntimeException("Parent not found");
-                    }
-                    String linkedStudent = parentDoc.getString("studentId");
-                    if (linkedStudent == null || !studentId.equals(linkedStudent)) {
-                        throw new RuntimeException("You do not have permission to view this student's data. Please connect to this student from your dashboard.");
-                    }
-                }
-            } else if ("TEACHER".equalsIgnoreCase(requesterRole) || "ROLE_TEACHER".equalsIgnoreCase(requesterRole)) {
-                // Teacher can view any of their students
-                DocumentSnapshot studentDoc = firestore.collection("students").document(studentId).get().get();
-                if (!studentDoc.exists() || !requesterId.equals(studentDoc.getString("teacherId"))) {
-                    throw new RuntimeException("Not authorized to access this student");
-                }
-            } else {
-                throw new RuntimeException("Not authorized");
-            }
+            assertRequesterCanAccessStudent(studentId, requesterId, requesterRole);
 
             // Fetch all quiz attempts for this student
             QuerySnapshot snapshot = firestore.collection(QUIZ_ATTEMPTS_COLLECTION)
@@ -603,5 +611,130 @@ public class QuizAttemptService {
                 .strongAreas(attempt.getStrongAreas())
                 .weakAreas(attempt.getWeakAreas())
                 .build();
+    }
+
+        private QuizAttempt assertRequesterCanAccessAttempt(
+            String quizAttemptId,
+            String requesterId,
+            String requesterRole,
+            String accessToken)
+            throws ExecutionException, InterruptedException {
+        DocumentSnapshot attemptSnap = firestore.collection(QUIZ_ATTEMPTS_COLLECTION)
+                .document(quizAttemptId)
+                .get().get();
+
+        if (!attemptSnap.exists()) {
+            throw new ResourceNotFoundException("QuizAttempt", "id", quizAttemptId);
+        }
+
+        QuizAttempt attempt = attemptSnap.toObject(QuizAttempt.class);
+        if (attempt == null) {
+            throw new ResourceNotFoundException("QuizAttempt", "id", quizAttemptId);
+        }
+
+        String normalizedRole = normalizeRole(requesterRole);
+        if ("TEACHER".equals(normalizedRole)) {
+            DocumentSnapshot quizSnap = firestore.collection(QUIZZES_COLLECTION)
+                    .document(attempt.getQuizId())
+                    .get().get();
+            if (!quizSnap.exists() || !requesterId.equals(quizSnap.getString("teacherId"))) {
+                throw new UnauthorizedAccessException("Not authorized to access this quiz attempt");
+            }
+            return attempt;
+        }
+
+        if ("PARENT".equals(normalizedRole)) {
+            if (attempt.getParentId() != null && requesterId.equals(attempt.getParentId())) {
+                return attempt;
+            }
+            if (attempt.getStudentId() != null && isParentAuthorizedForStudent(requesterId, attempt.getStudentId())) {
+                return attempt;
+            }
+            throw new UnauthorizedAccessException("Not authorized to access this quiz attempt");
+        }
+
+        // Public access is allowed only when the attempt is tied to an active quiz link.
+        QuerySnapshot linkQuery = firestore.collection(QUIZ_LINKS_COLLECTION)
+                .whereEqualTo("quizAttemptId", quizAttemptId)
+                .limit(1)
+                .get().get();
+
+        if (linkQuery.isEmpty() && attempt.getAttemptToken() != null) {
+            linkQuery = firestore.collection(QUIZ_LINKS_COLLECTION)
+                .whereEqualTo("quizId", attempt.getQuizId())
+                .whereEqualTo("token", attempt.getAttemptToken())
+                .limit(1)
+                .get().get();
+        }
+
+        if (linkQuery.isEmpty()) {
+            throw new UnauthorizedAccessException("Invalid quiz attempt session");
+        }
+
+        QuizLink link = linkQuery.getDocuments().get(0).toObject(QuizLink.class);
+        if (link == null || link.isExpired() || (link.getExpiredAt() != null && link.getExpiredAt().before(new Date()))) {
+            throw new UnauthorizedAccessException("Quiz attempt session has expired");
+        }
+
+        if (accessToken == null || accessToken.isBlank() || !Objects.equals(accessToken, link.getToken())) {
+            throw new UnauthorizedAccessException("Invalid quiz access token");
+        }
+
+        if (!Objects.equals(link.getQuizId(), attempt.getQuizId())) {
+            throw new UnauthorizedAccessException("Quiz attempt does not match the access link");
+        }
+
+        return attempt;
+    }
+
+    private void assertRequesterCanAccessStudent(String studentId, String requesterId, String requesterRole)
+            throws ExecutionException, InterruptedException {
+        String normalizedRole = normalizeRole(requesterRole);
+
+        if ("TEACHER".equals(normalizedRole)) {
+            DocumentSnapshot studentDoc = firestore.collection("students").document(studentId).get().get();
+            if (!studentDoc.exists() || !requesterId.equals(studentDoc.getString("teacherId"))) {
+                throw new UnauthorizedAccessException("Not authorized to access this student");
+            }
+            return;
+        }
+
+        if ("PARENT".equals(normalizedRole)) {
+            if (!isParentAuthorizedForStudent(requesterId, studentId)) {
+                throw new UnauthorizedAccessException("You do not have permission to view this student's data. Please connect to this student from your dashboard.");
+            }
+            return;
+        }
+
+        throw new UnauthorizedAccessException("Not authorized");
+    }
+
+    private boolean isParentAuthorizedForStudent(String parentId, String studentId)
+            throws ExecutionException, InterruptedException {
+        QuerySnapshot relationshipQuery = firestore.collection("parent_student_relationships")
+                .whereEqualTo("parentId", parentId)
+                .whereEqualTo("studentId", studentId)
+                .whereEqualTo("verificationStatus", "VERIFIED")
+                .limit(1)
+                .get().get();
+
+        if (!relationshipQuery.isEmpty()) {
+            DocumentSnapshot rel = relationshipQuery.getDocuments().get(0);
+            return rel.getString("disconnectedAt") == null;
+        }
+
+        DocumentSnapshot parentDoc = firestore.collection("parents").document(parentId).get().get();
+        if (!parentDoc.exists()) {
+            return false;
+        }
+        String linkedStudent = parentDoc.getString("studentId");
+        return linkedStudent != null && studentId.equals(linkedStudent);
+    }
+
+    private String normalizeRole(String role) {
+        if (role == null || role.isBlank()) {
+            return "";
+        }
+        return role.startsWith("ROLE_") ? role.substring(5).toUpperCase(Locale.ROOT) : role.toUpperCase(Locale.ROOT);
     }
 }

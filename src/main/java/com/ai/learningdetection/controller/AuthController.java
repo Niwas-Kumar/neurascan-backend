@@ -2,6 +2,7 @@ package com.ai.learningdetection.controller;
 
 import com.ai.learningdetection.dto.ApiResponse;
 import com.ai.learningdetection.dto.AuthDTOs;
+import com.ai.learningdetection.exception.UnauthorizedAccessException;
 import com.ai.learningdetection.security.IdentifiablePrincipal;
 import com.ai.learningdetection.service.AuthService;
 import com.ai.learningdetection.service.EmailService;
@@ -172,13 +173,43 @@ public class AuthController {
             DocumentSnapshot studentDoc = query.getDocuments().get(0);
             String studentId = studentDoc.getId();
 
+            if (!hasVerifiedRelationship(principal.getId(), studentId)) {
+                throw new UnauthorizedAccessException(
+                        "Student access is not verified for this account. Please connect using the Parent-Student verification flow.");
+            }
+
             // assign parent/student connection
             firestore.collection("parents").document(principal.getId()).update("studentId", studentId).get();
-            firestore.collection("students").document(studentId).update("parentUid", principal.getId()).get();
+
+            String currentParentUid = studentDoc.getString("parentUid");
+            if (currentParentUid == null || currentParentUid.isBlank() || principal.getId().equals(currentParentUid)) {
+                firestore.collection("students").document(studentId).update("parentUid", principal.getId()).get();
+            }
 
             return ResponseEntity.ok(ApiResponse.success(studentId, "Parent linked to student"));
         } catch (Exception ex) {
             throw new RuntimeException("Failed to link parent with student", ex);
+        }
+    }
+
+    private boolean hasVerifiedRelationship(String parentId, String studentId) {
+        try {
+            QuerySnapshot relationshipQuery = firestore.collection("parent_student_relationships")
+                    .whereEqualTo("parentId", parentId)
+                    .whereEqualTo("studentId", studentId)
+                    .whereEqualTo("verificationStatus", "VERIFIED")
+                    .limit(1)
+                    .get().get();
+
+            if (relationshipQuery.isEmpty()) {
+                return false;
+            }
+
+            DocumentSnapshot rel = relationshipQuery.getDocuments().get(0);
+            String disconnectedAt = rel.getString("disconnectedAt");
+            return disconnectedAt == null || disconnectedAt.isBlank();
+        } catch (Exception e) {
+            return false;
         }
     }
 }

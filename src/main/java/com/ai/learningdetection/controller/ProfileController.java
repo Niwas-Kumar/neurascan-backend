@@ -3,10 +3,12 @@ package com.ai.learningdetection.controller;
 import com.ai.learningdetection.dto.ApiResponse;
 import com.ai.learningdetection.entity.Parent;
 import com.ai.learningdetection.entity.Teacher;
+import com.ai.learningdetection.exception.UnauthorizedAccessException;
 import com.ai.learningdetection.security.IdentifiablePrincipal;
 import com.ai.learningdetection.util.JwtUtil;
 import com.google.cloud.firestore.DocumentSnapshot;
 import com.google.cloud.firestore.Firestore;
+import com.google.cloud.firestore.QuerySnapshot;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -138,9 +140,14 @@ public class ProfileController {
         
         // If parent, also update studentId (for linking to child's progress)
         if (!teacher && request.getStudentId() != null && !request.getStudentId().isEmpty()) {
+            if (!hasVerifiedRelationship(principal.getId(), request.getStudentId())) {
+                throw new UnauthorizedAccessException(
+                        "Student access is not verified for this account. Please connect using the Parent-Student verification flow.");
+            }
+
             firestore.collection(collection).document(principal.getId()).update("studentId", request.getStudentId()).get();
 
-            // Also link the student to this parent (set parentUid on student record)
+            // Keep legacy parentUid link in sync, but never overwrite another parent's existing link.
             linkStudentToParent(request.getStudentId(), principal.getId());
         }
         
@@ -213,11 +220,35 @@ public class ProfileController {
             var studentSnap = studentRef.get().get();
 
             if (studentSnap.exists()) {
-                studentRef.update("parentUid", parentId).get();
+                String currentParentUid = studentSnap.getString("parentUid");
+                if (currentParentUid == null || currentParentUid.isBlank() || parentId.equals(currentParentUid)) {
+                    studentRef.update("parentUid", parentId).get();
+                }
             }
         } catch (Exception e) {
             // Log but don't fail the profile update
             e.printStackTrace();
+        }
+    }
+
+    private boolean hasVerifiedRelationship(String parentId, String studentId) {
+        try {
+            QuerySnapshot relationshipQuery = firestore.collection("parent_student_relationships")
+                    .whereEqualTo("parentId", parentId)
+                    .whereEqualTo("studentId", studentId)
+                    .whereEqualTo("verificationStatus", "VERIFIED")
+                    .limit(1)
+                    .get().get();
+
+            if (relationshipQuery.isEmpty()) {
+                return false;
+            }
+
+            DocumentSnapshot rel = relationshipQuery.getDocuments().get(0);
+            String disconnectedAt = rel.getString("disconnectedAt");
+            return disconnectedAt == null || disconnectedAt.isBlank();
+        } catch (Exception e) {
+            return false;
         }
     }
 }

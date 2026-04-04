@@ -68,7 +68,7 @@ public class QuizController {
             @AuthenticationPrincipal IdentifiablePrincipal principal) {
 
         submissionRequest.setQuizId(quizId);
-        QuizResponse result = quizService.submitQuizResponse(submissionRequest);
+        QuizResponse result = quizService.submitQuizResponse(submissionRequest, principal.getId());
         return ResponseEntity.ok(ApiResponse.success(result, "Quiz submitted"));
     }
 
@@ -218,10 +218,15 @@ public class QuizController {
      */
     @PostMapping("/attempts/{quizAttemptId}/complete")
     public ResponseEntity<ApiResponse<QuizDTOs.QuizAttemptDetail>> completeQuizAttempt(
-            @PathVariable String quizAttemptId) {
+            @PathVariable String quizAttemptId,
+            @AuthenticationPrincipal IdentifiablePrincipal principal,
+            Authentication authentication) {
 
         try {
-            QuizDTOs.QuizAttemptDetail result = quizAttemptService.completeQuizAttempt(quizAttemptId);
+            QuizDTOs.QuizAttemptDetail result = quizAttemptService.completeQuizAttempt(
+                    quizAttemptId,
+                    principal.getId(),
+                    resolvePrimaryRole(authentication));
             return ResponseEntity.ok(ApiResponse.success(result, "Quiz completed"));
 
         } catch (Exception e) {
@@ -237,10 +242,15 @@ public class QuizController {
      */
     @GetMapping("/attempts/{quizAttemptId}")
     public ResponseEntity<ApiResponse<QuizDTOs.QuizAttemptDetail>> getQuizAttemptDetails(
-            @PathVariable String quizAttemptId) {
+            @PathVariable String quizAttemptId,
+            @AuthenticationPrincipal IdentifiablePrincipal principal,
+            Authentication authentication) {
 
         try {
-            QuizDTOs.QuizAttemptDetail attempt = quizAttemptService.getQuizAttemptDetail(quizAttemptId);
+            QuizDTOs.QuizAttemptDetail attempt = quizAttemptService.getQuizAttemptDetail(
+                    quizAttemptId,
+                    principal.getId(),
+                    resolvePrimaryRole(authentication));
             return ResponseEntity.ok(ApiResponse.success(attempt, "Attempt details retrieved"));
 
         } catch (Exception e) {
@@ -280,10 +290,15 @@ public class QuizController {
     public ResponseEntity<ApiResponse<List<QuizDTOs.QuizAttemptDetail>>> getStudentQuizAttempts(
             @PathVariable String studentId,
             @RequestParam String quizId,
-            @AuthenticationPrincipal IdentifiablePrincipal principal) {
+            @AuthenticationPrincipal IdentifiablePrincipal principal,
+            Authentication authentication) {
 
         try {
-            List<QuizDTOs.QuizAttemptDetail> attempts = quizAttemptService.getStudentQuizAttempts(studentId, quizId);
+            List<QuizDTOs.QuizAttemptDetail> attempts = quizAttemptService.getStudentQuizAttempts(
+                    studentId,
+                    quizId,
+                    principal.getId(),
+                    resolvePrimaryRole(authentication));
             return ResponseEntity.ok(ApiResponse.success(attempts, "Student quiz attempts retrieved"));
 
         } catch (Exception e) {
@@ -318,6 +333,13 @@ public class QuizController {
             return ResponseEntity.badRequest()
                     .body(ApiResponse.error("Failed to fetch student attempts: " + e.getMessage()));
         }
+    }
+
+    private String resolvePrimaryRole(Authentication authentication) {
+        return authentication.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .findFirst()
+                .orElse("");
     }
 }
 

@@ -29,6 +29,7 @@ public class QuizService {
 
     private static final String QUIZZES_COLLECTION = "quizzes";
     private static final String QUIZ_RESPONSES_COLLECTION = "quiz_responses";
+    private static final String STUDENTS_COLLECTION = "students";
 
     public QuizDTOs.QuizDetail createQuiz(String teacherId, QuizDTOs.QuizGenerationRequest request) {
         try {
@@ -190,7 +191,9 @@ public class QuizService {
 
     public List<QuizResponse> getQuizResponsesForStudent(String studentId, String requesterId, String requesterRole) {
         try {
-            if ("PARENT".equalsIgnoreCase(requesterRole) || "ROLE_PARENT".equalsIgnoreCase(requesterRole)) {
+            String normalizedRole = normalizeRole(requesterRole);
+
+            if ("PARENT".equals(normalizedRole)) {
                 // Check via new parent-student relationship system
                 QuerySnapshot relationshipQuery = firestore.collection("parent_student_relationships")
                         .whereEqualTo("parentId", requesterId)
@@ -216,8 +219,8 @@ public class QuizService {
                         throw new UnauthorizedAccessException("You do not have permission to view this student's data. Please connect to this student from your dashboard.");
                     }
                 }
-            } else if ("TEACHER".equals(requesterRole)) {
-                DocumentSnapshot studentDoc = firestore.collection("students").document(studentId).get().get();
+            } else if ("TEACHER".equals(normalizedRole)) {
+                DocumentSnapshot studentDoc = firestore.collection(STUDENTS_COLLECTION).document(studentId).get().get();
                 if (!studentDoc.exists() || !requesterId.equals(studentDoc.getString("teacherId"))) {
                     throw new UnauthorizedAccessException("Not authorized to access this student");
                 }
@@ -237,7 +240,7 @@ public class QuizService {
         }
     }
 
-    public QuizResponse submitQuizResponse(QuizDTOs.QuizSubmissionRequest request) {
+    public QuizResponse submitQuizResponse(QuizDTOs.QuizSubmissionRequest request, String teacherId) {
         try {
             DocumentSnapshot quizSnapshot = firestore.collection(QUIZZES_COLLECTION)
                     .document(request.getQuizId()).get().get();
@@ -245,6 +248,25 @@ public class QuizService {
                 throw new ResourceNotFoundException("Quiz", "id", request.getQuizId());
             }
             Quiz quiz = quizSnapshot.toObject(Quiz.class);
+
+            if (quiz == null || !teacherId.equals(quiz.getTeacherId())) {
+                throw new UnauthorizedAccessException("Not authorized to submit responses for this quiz");
+            }
+
+            if (request.getStudentId() != null && !request.getStudentId().isBlank()) {
+                DocumentSnapshot studentSnapshot = firestore.collection(STUDENTS_COLLECTION)
+                        .document(request.getStudentId())
+                        .get().get();
+
+                if (!studentSnapshot.exists() || !teacherId.equals(studentSnapshot.getString("teacherId"))) {
+                    throw new UnauthorizedAccessException("Student does not belong to this teacher");
+                }
+            }
+
+            if (quiz.getClassId() != null && request.getClassId() != null
+                    && !quiz.getClassId().equals(request.getClassId())) {
+                throw new UnauthorizedAccessException("Class mismatch for quiz submission");
+            }
 
             int correct = 0;
             for (Quiz.QuizQuestion question : quiz.getQuestions()) {
@@ -273,6 +295,15 @@ public class QuizService {
         } catch (InterruptedException | ExecutionException e) {
             throw new RuntimeException("Failed to submit quiz", e);
         }
+    }
+
+    private String normalizeRole(String requesterRole) {
+        if (requesterRole == null || requesterRole.isBlank()) {
+            return "";
+        }
+        return requesterRole.startsWith("ROLE_")
+                ? requesterRole.substring("ROLE_".length()).toUpperCase(Locale.ROOT)
+                : requesterRole.toUpperCase(Locale.ROOT);
     }
 
     public List<QuizResponse> getQuizResponses(String quizId, String teacherId) {

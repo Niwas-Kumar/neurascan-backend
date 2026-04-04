@@ -159,11 +159,17 @@ public class PublicQuizController {
     @PostMapping("/{attemptId}/answer")
     public ResponseEntity<ApiResponse<QuizDTOs.QuestionResponseDetail>> submitAnswer(
             @PathVariable String attemptId,
+            @RequestParam String token,
             @RequestBody QuizDTOs.QuestionResponseRequest request) {
 
         try {
             request.setQuizAttemptId(attemptId);
-            QuizDTOs.QuestionResponseDetail response = quizAttemptService.submitQuestionResponse(attemptId, request);
+            QuizDTOs.QuestionResponseDetail response = quizAttemptService.submitQuestionResponse(
+                    attemptId,
+                    request,
+                    null,
+                    null,
+                    token);
 
             log.info("📝 Answer submitted: attemptId={}, questionId={}, correct={}",
                     attemptId, request.getQuestionId(), response.isCorrect());
@@ -183,10 +189,15 @@ public class PublicQuizController {
      */
     @PostMapping("/{attemptId}/complete")
     public ResponseEntity<ApiResponse<QuizDTOs.QuizAttemptDetail>> completeAttempt(
-            @PathVariable String attemptId) {
+            @PathVariable String attemptId,
+            @RequestParam String token) {
 
         try {
-            QuizDTOs.QuizAttemptDetail result = quizAttemptService.completeQuizAttempt(attemptId);
+            QuizDTOs.QuizAttemptDetail result = quizAttemptService.completeQuizAttempt(
+                    attemptId,
+                    null,
+                    null,
+                    token);
 
             log.info("✅ Quiz completed: attemptId={}, score={}", attemptId, result.getScore());
             return ResponseEntity.ok(ApiResponse.success(result, "Quiz completed successfully!"));
@@ -204,10 +215,15 @@ public class PublicQuizController {
      */
     @GetMapping("/{attemptId}/result")
     public ResponseEntity<ApiResponse<QuizDTOs.QuizAttemptDetail>> getAttemptResult(
-            @PathVariable String attemptId) {
+            @PathVariable String attemptId,
+            @RequestParam String token) {
 
         try {
-            QuizDTOs.QuizAttemptDetail result = quizAttemptService.getQuizAttemptDetail(attemptId);
+            QuizDTOs.QuizAttemptDetail result = quizAttemptService.getQuizAttemptDetail(
+                    attemptId,
+                    null,
+                    null,
+                    token);
             return ResponseEntity.ok(ApiResponse.success(result, "Quiz result retrieved"));
 
         } catch (Exception e) {

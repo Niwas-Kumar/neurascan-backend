@@ -481,7 +481,16 @@ public class AnalysisService {
         log.debug("Parent {} legacy studentId: {}, requested: {}", parentId, storedStudentId, studentId);
 
         if (storedStudentId != null && studentId.equals(storedStudentId)) {
-            return; // Authorized via legacy system
+            // For legacy records, allow access only when the student isn't linked yet or is linked to this parent.
+            DocumentSnapshot studentSnap = firestore.collection(STUDENTS_COLLECTION).document(studentId).get().get();
+            if (!studentSnap.exists()) {
+                throw new UnauthorizedAccessException("Student not found");
+            }
+
+            String linkedParentUid = studentSnap.getString("parentUid");
+            if (linkedParentUid == null || linkedParentUid.isBlank() || parentId.equals(linkedParentUid)) {
+                return;
+            }
         }
 
         // No authorization found
