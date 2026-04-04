@@ -40,8 +40,22 @@ public class HealthController {
     @Value("${feature.admin.panel.enabled:false}")
     private boolean adminPanelEnabled;
 
+    /**
+     * Lightweight wake/keep-alive endpoint.
+     * Always returns HTTP 200 so Render/Uptime robots can keep the service warm.
+     */
     @GetMapping("/ping")
     public ResponseEntity<Map<String, String>> ping() {
+        return ResponseEntity.ok(Map.of("status", "UP"));
+    }
+
+    @GetMapping("/health")
+    public ResponseEntity<Map<String, String>> health() {
+        return ResponseEntity.ok(Map.of("status", "UP"));
+    }
+
+    @GetMapping("/api/health")
+    public ResponseEntity<Map<String, String>> apiHealth() {
         return ResponseEntity.ok(Map.of("status", "UP"));
     }
 
