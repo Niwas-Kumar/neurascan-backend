@@ -310,8 +310,8 @@ public class ParentStudentService {
             for (DocumentSnapshot doc : query.getDocuments()) {
                 ParentStudentRelationship rel = doc.toObject(ParentStudentRelationship.class);
 
-                // Skip disconnected relationships
-                if (rel.getDisconnectedAt() != null) continue;
+                // Skip null or disconnected relationships
+                if (rel == null || rel.getDisconnectedAt() != null) continue;
 
                 ConnectedStudentResponse student = mapToConnectedStudent(rel);
                 students.add(student);
@@ -323,10 +323,15 @@ public class ParentStudentService {
                 }
             }
 
-            // Sort: primary first, then by connection date
+            // Sort: primary first, then by connection date (null-safe)
             students.sort((a, b) -> {
                 if (a.isPrimary() != b.isPrimary()) return a.isPrimary() ? -1 : 1;
-                return b.getConnectedAt().compareTo(a.getConnectedAt());
+                Instant aTime = a.getConnectedAt();
+                Instant bTime = b.getConnectedAt();
+                if (bTime == null && aTime == null) return 0;
+                if (bTime == null) return -1;
+                if (aTime == null) return 1;
+                return bTime.compareTo(aTime);
             });
 
             return ConnectedStudentsListResponse.builder()

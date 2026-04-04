@@ -80,6 +80,9 @@ public class SecurityConfig {
                 .requestMatchers("/api/analysis/student-report/**", "/analysis/student-report/**").hasRole("PARENT")
                 .requestMatchers("/api/analysis/progress/**", "/analysis/progress/**").hasRole("PARENT")
 
+                // Parent-student connection management — PARENT only
+                .requestMatchers("/api/parent/students/**", "/parent/students/**").hasRole("PARENT")
+
                 // Everything else requires authentication
                 .anyRequest().authenticated()
             )

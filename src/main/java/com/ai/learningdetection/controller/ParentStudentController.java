@@ -26,7 +26,7 @@ import jakarta.servlet.http.HttpServletRequest;
  * - Managing primary student selection
  */
 @RestController
-@RequestMapping("/api/parent/students")
+@RequestMapping({"/api/parent/students", "/parent/students"})
 @RequiredArgsConstructor
 @Slf4j
 @PreAuthorize("hasRole('PARENT')")
