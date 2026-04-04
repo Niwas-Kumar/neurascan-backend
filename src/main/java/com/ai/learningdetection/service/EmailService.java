@@ -56,6 +56,15 @@ public class EmailService {
     }
 
     /**
+     * Send student connection verification OTP email
+     */
+    public boolean sendStudentConnectionOTP(String toEmail, String otp, String studentName, String className) {
+        String subject = "🧠 NeuraScan — Verify Student Connection";
+        String htmlContent = generateStudentConnectionOtpHtml(otp, studentName, className);
+        return sendEmail(toEmail, subject, htmlContent);
+    }
+
+    /**
      * Generic email send method
      */
     private boolean sendEmail(String toEmail, String subject, String htmlContent) {
@@ -206,6 +215,54 @@ public class EmailService {
             "    <div class='info-box'>\n" +
             "      <p>If you didn't request this, ignore this email</p>\n" +
             "    </div>\n" +
+            "  </div>\n" +
+            "  <div class='footer'><p>© 2026 NeuraScan. All rights reserved.</p></div>\n" +
+            "</div>\n" +
+            "</body></html>";
+    }
+
+    /**
+     * Generate student connection OTP email HTML
+     */
+    private String generateStudentConnectionOtpHtml(String otp, String studentName, String className) {
+        return "<!DOCTYPE html>\n" +
+            "<html><head><meta charset='UTF-8'><style>\n" +
+            "body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; }\n" +
+            ".container { max-width: 600px; margin: 40px auto; background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); overflow: hidden; }\n" +
+            ".header { background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%); color: white; padding: 40px 20px; text-align: center; }\n" +
+            ".header h1 { margin: 0; font-size: 28px; font-weight: 700; }\n" +
+            ".content { padding: 40px 30px; }\n" +
+            ".student-box { background: linear-gradient(135deg, #e6fffa 0%, #f0fdf4 100%); border: 2px solid #14b8a6; border-radius: 10px; padding: 20px; text-align: center; margin: 24px 0; }\n" +
+            ".student-name { font-size: 20px; font-weight: 700; color: #0d9488; margin-bottom: 4px; }\n" +
+            ".student-class { font-size: 14px; color: #5f6368; }\n" +
+            ".otp-box { background: #f8f9fa; border: 2px solid #e8eaed; border-radius: 8px; padding: 24px; text-align: center; margin: 30px 0; }\n" +
+            ".otp-code { font-size: 36px; font-weight: 700; color: #14b8a6; letter-spacing: 4px; font-family: monospace; }\n" +
+            ".info-box { background: #e6fffa; border-left: 4px solid #14b8a6; padding: 16px; margin: 20px 0; border-radius: 4px; }\n" +
+            ".info-box p { margin: 0; font-size: 13px; color: #0d9488; }\n" +
+            ".footer { background: #f8f9fa; padding: 20px; text-align: center; border-top: 1px solid #e8eaed; font-size: 12px; color: #80868b; }\n" +
+            "</style></head><body>\n" +
+            "<div class='container'>\n" +
+            "  <div class='header'><h1>🧠 NeuraScan</h1><p>Connect to Your Child's Account</p></div>\n" +
+            "  <div class='content'>\n" +
+            "    <p>You're connecting to:</p>\n" +
+            "    <div class='student-box'>\n" +
+            "      <div class='student-name'>👤 " + studentName + "</div>\n" +
+            "      <div class='student-class'>Class: " + className + "</div>\n" +
+            "    </div>\n" +
+            "    <p>Enter this verification code to complete the connection:</p>\n" +
+            "    <div class='otp-box'>\n" +
+            "      <div class='otp-code'>" + otp + "</div>\n" +
+            "      <div style='font-size: 12px; color: #80868b; margin-top: 12px;'>Valid for 15 minutes</div>\n" +
+            "    </div>\n" +
+            "    <div class='info-box'>\n" +
+            "      <p><strong>Once connected</strong>, you will be able to:</p>\n" +
+            "      <ul style='margin: 8px 0 0; padding-left: 20px;'>\n" +
+            "        <li>View your child's assessment reports</li>\n" +
+            "        <li>Track their progress over time</li>\n" +
+            "        <li>Receive quiz links sent by teachers</li>\n" +
+            "      </ul>\n" +
+            "    </div>\n" +
+            "    <p style='color: #80868b; font-size: 12px;'>If you didn't request this, please ignore this email.</p>\n" +
             "  </div>\n" +
             "  <div class='footer'><p>© 2026 NeuraScan. All rights reserved.</p></div>\n" +
             "</div>\n" +
