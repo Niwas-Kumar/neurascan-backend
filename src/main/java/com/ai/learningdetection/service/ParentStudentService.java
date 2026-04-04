@@ -142,7 +142,7 @@ public class ParentStudentService {
                     .createdAt(now)
                     .createdFromIp(ipAddress)
                     .verificationAttempts(0)
-                    .isPrimary(activeConnections == 0) // First connection is primary
+                    .primary(activeConnections == 0) // First connection is primary
                     .studentName(validation.getStudentName())
                     .studentClassName(validation.getClassName())
                     .studentRollNumber(studentId)
