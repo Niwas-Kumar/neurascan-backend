@@ -326,8 +326,8 @@ public class ParentStudentService {
             // Sort: primary first, then by connection date (null-safe)
             students.sort((a, b) -> {
                 if (a.isPrimary() != b.isPrimary()) return a.isPrimary() ? -1 : 1;
-                Instant aTime = a.getConnectedAt();
-                Instant bTime = b.getConnectedAt();
+                String aTime = a.getConnectedAt();
+                String bTime = b.getConnectedAt();
                 if (bTime == null && aTime == null) return 0;
                 if (bTime == null) return -1;
                 if (aTime == null) return 1;
