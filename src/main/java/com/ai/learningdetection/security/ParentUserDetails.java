@@ -17,8 +17,6 @@ public class ParentUserDetails implements UserDetails, IdentifiablePrincipal {
     private final String password;
     @Getter
     private final String name;
-    @Getter
-    private final String studentId;
     private final Collection<? extends GrantedAuthority> authorities;
 
     public ParentUserDetails(Parent parent) {
@@ -26,7 +24,6 @@ public class ParentUserDetails implements UserDetails, IdentifiablePrincipal {
         this.email       = parent.getEmail();
         this.password    = parent.getPassword();
         this.name        = parent.getName();
-        this.studentId   = parent.getStudentId();
         this.authorities = List.of(new SimpleGrantedAuthority("ROLE_PARENT"));
     }
 

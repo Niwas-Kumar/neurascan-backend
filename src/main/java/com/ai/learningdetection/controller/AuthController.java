@@ -178,13 +178,8 @@ public class AuthController {
                         "Student access is not verified for this account. Please connect using the Parent-Student verification flow.");
             }
 
-            // assign parent/student connection
-            firestore.collection("parents").document(principal.getId()).update("studentId", studentId).get();
-
-            String currentParentUid = studentDoc.getString("parentUid");
-            if (currentParentUid == null || currentParentUid.isBlank() || principal.getId().equals(currentParentUid)) {
-                firestore.collection("students").document(studentId).update("parentUid", principal.getId()).get();
-            }
+            // Security hardening: legacy parent.studentId linkage is removed.
+            // Verified relationship records are now the sole source of truth.
 
             return ResponseEntity.ok(ApiResponse.success(studentId, "Parent linked to student"));
         } catch (Exception ex) {

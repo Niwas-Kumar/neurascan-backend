@@ -209,15 +209,7 @@ public class QuizService {
                 }
 
                 if (!hasRelationship) {
-                    // Fallback: Check legacy parent.studentId field
-                    DocumentSnapshot parentDoc = firestore.collection("parents").document(requesterId).get().get();
-                    if (!parentDoc.exists()) {
-                        throw new UnauthorizedAccessException("Parent not found");
-                    }
-                    String linkedStudent = parentDoc.getString("studentId");
-                    if (linkedStudent == null || !studentId.equals(linkedStudent)) {
-                        throw new UnauthorizedAccessException("You do not have permission to view this student's data. Please connect to this student from your dashboard.");
-                    }
+                    throw new UnauthorizedAccessException("You do not have permission to view this student's data. Please connect using the verified parent-student flow.");
                 }
             } else if ("TEACHER".equals(normalizedRole)) {
                 DocumentSnapshot studentDoc = firestore.collection(STUDENTS_COLLECTION).document(studentId).get().get();

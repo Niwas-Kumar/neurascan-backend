@@ -141,8 +141,6 @@ public class AuthService {
                     .name(request.getName())
                     .email(request.getEmail())
                     .password(passwordEncoder.encode(request.getPassword()))
-                    // Student linkage must happen through verified parent-student connection flow.
-                    .studentId(null)
                     .emailVerified(true)
                     .build();
 

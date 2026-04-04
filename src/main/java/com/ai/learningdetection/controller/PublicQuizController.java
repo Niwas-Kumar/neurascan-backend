@@ -11,7 +11,9 @@ import com.google.cloud.firestore.Firestore;
 import com.google.cloud.firestore.QuerySnapshot;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Date;
@@ -34,17 +36,18 @@ public class PublicQuizController {
     private static final String QUIZ_LINKS_COLLECTION = "quiz_links";
     private static final String QUIZZES_COLLECTION = "quizzes";
 
-    /**
-     * GET /api/quiz-attempt/validate?quizId=xxx&token=yyy
+        /**
+         * GET /api/quiz-attempt/validate?quizId=xxx
      * Validates a quiz link token and returns quiz details if valid.
      * Called when user first opens the quiz attempt page.
      */
     @GetMapping("/validate")
     public ResponseEntity<ApiResponse<QuizDTOs.QuizAttemptStartResponse>> validateQuizLink(
             @RequestParam String quizId,
-            @RequestParam String token) {
+                        @RequestHeader(value = "Authorization", required = false) String authorizationHeader) {
 
         try {
+                        String token = extractBearerToken(authorizationHeader);
             log.info("🔐 Validating quiz link: quizId={}, token={}", quizId, token.substring(0, 8) + "...");
 
             // Find quiz link by token
@@ -55,7 +58,7 @@ public class PublicQuizController {
 
             if (linkQuery.isEmpty()) {
                 log.warn("❌ Invalid quiz link token");
-                return ResponseEntity.badRequest()
+                                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                         .body(ApiResponse.error("Invalid or expired quiz link. Please request a new link from your teacher."));
             }
 
@@ -65,7 +68,7 @@ public class PublicQuizController {
             // Check if expired
             if (link.isExpired() || (link.getExpiredAt() != null && link.getExpiredAt().before(new Date()))) {
                 log.warn("❌ Quiz link has expired");
-                return ResponseEntity.badRequest()
+                                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                         .body(ApiResponse.error("This quiz link has expired. Please request a new link from your teacher."));
             }
 
@@ -102,6 +105,9 @@ public class PublicQuizController {
             log.info("✅ Quiz link validated successfully for: {}", link.getRecipientEmail());
             return ResponseEntity.ok(ApiResponse.success(response, "Quiz link is valid"));
 
+        } catch (BadCredentialsException e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiResponse.error(e.getMessage()));
         } catch (Exception e) {
             log.error("❌ Error validating quiz link: {}", e.getMessage());
             return ResponseEntity.badRequest()
@@ -115,19 +121,21 @@ public class PublicQuizController {
      */
     @PostMapping("/start")
     public ResponseEntity<ApiResponse<QuizDTOs.QuizAttemptDetail>> startAttempt(
-            @RequestBody QuizDTOs.QuizAttemptStartRequest request) {
+            @RequestBody QuizDTOs.QuizAttemptStartRequest request,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader) {
 
         try {
+            String token = extractBearerToken(authorizationHeader);
             log.info("🚀 Starting quiz attempt: quizId={}", request.getQuizId());
 
             // Validate token first
             QuerySnapshot linkQuery = firestore.collection(QUIZ_LINKS_COLLECTION)
                     .whereEqualTo("quizId", request.getQuizId())
-                    .whereEqualTo("token", request.getToken())
+                    .whereEqualTo("token", token)
                     .get().get();
 
             if (linkQuery.isEmpty()) {
-                return ResponseEntity.badRequest()
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                         .body(ApiResponse.error("Invalid quiz link token"));
             }
 
@@ -139,12 +147,15 @@ public class PublicQuizController {
                     request.getQuizId(),
                     link.getRecipientId(),
                     link.getRecipientType(),
-                    request.getToken()
+                    token
             );
 
             log.info("✅ Quiz attempt started: attemptId={}", attempt.getId());
             return ResponseEntity.ok(ApiResponse.success(attempt, "Quiz attempt started"));
 
+        } catch (BadCredentialsException e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiResponse.error(e.getMessage()));
         } catch (Exception e) {
             log.error("❌ Error starting quiz attempt: {}", e.getMessage());
             return ResponseEntity.badRequest()
@@ -159,10 +170,11 @@ public class PublicQuizController {
     @PostMapping("/{attemptId}/answer")
     public ResponseEntity<ApiResponse<QuizDTOs.QuestionResponseDetail>> submitAnswer(
             @PathVariable String attemptId,
-            @RequestParam String token,
-            @RequestBody QuizDTOs.QuestionResponseRequest request) {
+            @RequestBody QuizDTOs.QuestionResponseRequest request,
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader) {
 
         try {
+            String token = extractBearerToken(authorizationHeader);
             request.setQuizAttemptId(attemptId);
             QuizDTOs.QuestionResponseDetail response = quizAttemptService.submitQuestionResponse(
                     attemptId,
@@ -176,6 +188,9 @@ public class PublicQuizController {
 
             return ResponseEntity.ok(ApiResponse.success(response, "Answer recorded"));
 
+        } catch (BadCredentialsException e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiResponse.error(e.getMessage()));
         } catch (Exception e) {
             log.error("❌ Error submitting answer: {}", e.getMessage());
             return ResponseEntity.badRequest()
@@ -190,9 +205,10 @@ public class PublicQuizController {
     @PostMapping("/{attemptId}/complete")
     public ResponseEntity<ApiResponse<QuizDTOs.QuizAttemptDetail>> completeAttempt(
             @PathVariable String attemptId,
-            @RequestParam String token) {
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader) {
 
         try {
+            String token = extractBearerToken(authorizationHeader);
             QuizDTOs.QuizAttemptDetail result = quizAttemptService.completeQuizAttempt(
                     attemptId,
                     null,
@@ -202,6 +218,9 @@ public class PublicQuizController {
             log.info("✅ Quiz completed: attemptId={}, score={}", attemptId, result.getScore());
             return ResponseEntity.ok(ApiResponse.success(result, "Quiz completed successfully!"));
 
+        } catch (BadCredentialsException e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiResponse.error(e.getMessage()));
         } catch (Exception e) {
             log.error("❌ Error completing quiz: {}", e.getMessage());
             return ResponseEntity.badRequest()
@@ -216,9 +235,10 @@ public class PublicQuizController {
     @GetMapping("/{attemptId}/result")
     public ResponseEntity<ApiResponse<QuizDTOs.QuizAttemptDetail>> getAttemptResult(
             @PathVariable String attemptId,
-            @RequestParam String token) {
+            @RequestHeader(value = "Authorization", required = false) String authorizationHeader) {
 
         try {
+            String token = extractBearerToken(authorizationHeader);
             QuizDTOs.QuizAttemptDetail result = quizAttemptService.getQuizAttemptDetail(
                     attemptId,
                     null,
@@ -226,10 +246,25 @@ public class PublicQuizController {
                     token);
             return ResponseEntity.ok(ApiResponse.success(result, "Quiz result retrieved"));
 
+        } catch (BadCredentialsException e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiResponse.error(e.getMessage()));
         } catch (Exception e) {
             log.error("❌ Error fetching quiz result: {}", e.getMessage());
             return ResponseEntity.badRequest()
                     .body(ApiResponse.error("Could not fetch quiz result: " + e.getMessage()));
         }
+    }
+
+    // Security: token must come only from Authorization Bearer header, never query/body.
+    private String extractBearerToken(String authorizationHeader) {
+        if (authorizationHeader == null || !authorizationHeader.startsWith("Bearer ")) {
+            throw new BadCredentialsException("Missing or invalid Authorization header");
+        }
+        String token = authorizationHeader.substring(7).trim();
+        if (token.isEmpty()) {
+            throw new BadCredentialsException("Missing or invalid Authorization header");
+        }
+        return token;
     }
 }

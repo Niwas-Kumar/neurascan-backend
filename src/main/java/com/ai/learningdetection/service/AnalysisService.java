@@ -463,38 +463,15 @@ public class AnalysisService {
                 .get().get();
 
         if (!relationshipQuery.isEmpty()) {
-            // Check if not disconnected
             DocumentSnapshot rel = relationshipQuery.getDocuments().get(0);
-            if (rel.getString("disconnectedAt") == null) {
+            String disconnectedAt = rel.getString("disconnectedAt");
+            if (disconnectedAt == null || disconnectedAt.isBlank()) {
                 log.debug("Parent {} authorized via relationship system for student {}", parentId, studentId);
-                return; // Authorized via new relationship system
-            }
-        }
-
-        // Fallback: Check legacy parent.studentId field for backward compatibility
-        DocumentSnapshot p = firestore.collection(PARENTS_COLLECTION).document(parentId).get().get();
-        if (!p.exists()) {
-            throw new UnauthorizedAccessException("Parent not found");
-        }
-
-        String storedStudentId = p.getString("studentId");
-        log.debug("Parent {} legacy studentId: {}, requested: {}", parentId, storedStudentId, studentId);
-
-        if (storedStudentId != null && studentId.equals(storedStudentId)) {
-            // For legacy records, allow access only when the student isn't linked yet or is linked to this parent.
-            DocumentSnapshot studentSnap = firestore.collection(STUDENTS_COLLECTION).document(studentId).get().get();
-            if (!studentSnap.exists()) {
-                throw new UnauthorizedAccessException("Student not found");
-            }
-
-            String linkedParentUid = studentSnap.getString("parentUid");
-            if (linkedParentUid == null || linkedParentUid.isBlank() || parentId.equals(linkedParentUid)) {
                 return;
             }
         }
 
-        // No authorization found
-        throw new UnauthorizedAccessException("You do not have permission to view this student's data. Please connect to this student from your dashboard.");
+        throw new UnauthorizedAccessException("You do not have permission to view this student's data. Please connect using the verified parent-student flow.");
     }
 
     private String calculateTrend(List<AnalysisReport> reports) {

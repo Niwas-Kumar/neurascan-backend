@@ -3,7 +3,6 @@ package com.ai.learningdetection.controller;
 import com.ai.learningdetection.dto.ApiResponse;
 import com.ai.learningdetection.entity.Parent;
 import com.ai.learningdetection.entity.Teacher;
-import com.ai.learningdetection.exception.UnauthorizedAccessException;
 import com.ai.learningdetection.security.IdentifiablePrincipal;
 import com.ai.learningdetection.util.JwtUtil;
 import com.google.cloud.firestore.DocumentSnapshot;
@@ -38,6 +37,7 @@ public class ProfileController {
 
     private static final String TEACHERS_COLLECTION = "teachers";
     private static final String PARENTS_COLLECTION = "parents";
+    private static final String RELATIONSHIPS_COLLECTION = "parent_student_relationships";
 
     // ── Inner DTOs ────────────────────────────────────────────
 
@@ -47,7 +47,7 @@ public class ProfileController {
         private String name;
 
         private String school; // Optional for parents, used by teachers
-        private String studentId; // Optional for parents to link their child
+        private String studentId; // Deprecated: parent-student linking is managed via verified relationship endpoints
     }
 
     @Data
@@ -109,7 +109,7 @@ public class ProfileController {
                 .email(email)
                 .role(role)
                 .school(doc.getString("school"))
-                .studentId(doc.getString("studentId"))
+            .studentId(teacher ? null : resolvePrimaryStudentId(principal.getId()))
                 .picture(doc.getString("picture"))
                 .jwtToken(jwtUtil.generateToken(email, role, doc.getId(), name, doc.getString("picture")))
                 .build();
@@ -138,19 +138,6 @@ public class ProfileController {
             firestore.collection(collection).document(principal.getId()).update("school", request.getSchool()).get();
         }
         
-        // If parent, also update studentId (for linking to child's progress)
-        if (!teacher && request.getStudentId() != null && !request.getStudentId().isEmpty()) {
-            if (!hasVerifiedRelationship(principal.getId(), request.getStudentId())) {
-                throw new UnauthorizedAccessException(
-                        "Student access is not verified for this account. Please connect using the Parent-Student verification flow.");
-            }
-
-            firestore.collection(collection).document(principal.getId()).update("studentId", request.getStudentId()).get();
-
-            // Keep legacy parentUid link in sync, but never overwrite another parent's existing link.
-            linkStudentToParent(request.getStudentId(), principal.getId());
-        }
-        
         // Fetch and return the updated profile
         DocumentSnapshot doc = firestore.collection(collection).document(principal.getId()).get().get();
         if (!doc.exists()) {
@@ -167,7 +154,7 @@ public class ProfileController {
                 .email(email)
                 .role(role)
                 .school(doc.getString("school"))
-                .studentId(doc.getString("studentId"))
+            .studentId(teacher ? null : resolvePrimaryStudentId(principal.getId()))
                 .picture(doc.getString("picture"))
                 .jwtToken(jwtUtil.generateToken(email, role, doc.getId(), name, doc.getString("picture")))
                 .build();
@@ -211,44 +198,41 @@ public class ProfileController {
         return ResponseEntity.ok(ApiResponse.success(null, "Password changed successfully"));
     }
 
-    /**
-     * Link a student to a parent by setting parentUid on the student record.
-     */
-    private void linkStudentToParent(String studentId, String parentId) {
+    // Security: parent profile now exposes studentId from verified relationship records only.
+    private String resolvePrimaryStudentId(String parentId) {
         try {
-            var studentRef = firestore.collection("students").document(studentId);
-            var studentSnap = studentRef.get().get();
+            QuerySnapshot primaryQuery = firestore.collection(RELATIONSHIPS_COLLECTION)
+                    .whereEqualTo("parentId", parentId)
+                    .whereEqualTo("verificationStatus", "VERIFIED")
+                    .whereEqualTo("isPrimary", true)
+                    .limit(1)
+                    .get().get();
 
-            if (studentSnap.exists()) {
-                String currentParentUid = studentSnap.getString("parentUid");
-                if (currentParentUid == null || currentParentUid.isBlank() || parentId.equals(currentParentUid)) {
-                    studentRef.update("parentUid", parentId).get();
+            if (!primaryQuery.isEmpty()) {
+                DocumentSnapshot rel = primaryQuery.getDocuments().get(0);
+                String disconnectedAt = rel.getString("disconnectedAt");
+                if (disconnectedAt == null || disconnectedAt.isBlank()) {
+                    return rel.getString("studentId");
                 }
             }
-        } catch (Exception e) {
-            // Log but don't fail the profile update
-            e.printStackTrace();
-        }
-    }
 
-    private boolean hasVerifiedRelationship(String parentId, String studentId) {
-        try {
-            QuerySnapshot relationshipQuery = firestore.collection("parent_student_relationships")
+            QuerySnapshot fallbackQuery = firestore.collection(RELATIONSHIPS_COLLECTION)
                     .whereEqualTo("parentId", parentId)
-                    .whereEqualTo("studentId", studentId)
                     .whereEqualTo("verificationStatus", "VERIFIED")
                     .limit(1)
                     .get().get();
 
-            if (relationshipQuery.isEmpty()) {
-                return false;
+            if (!fallbackQuery.isEmpty()) {
+                DocumentSnapshot rel = fallbackQuery.getDocuments().get(0);
+                String disconnectedAt = rel.getString("disconnectedAt");
+                if (disconnectedAt == null || disconnectedAt.isBlank()) {
+                    return rel.getString("studentId");
+                }
             }
-
-            DocumentSnapshot rel = relationshipQuery.getDocuments().get(0);
-            String disconnectedAt = rel.getString("disconnectedAt");
-            return disconnectedAt == null || disconnectedAt.isBlank();
         } catch (Exception e) {
-            return false;
+            return null;
         }
+
+        return null;
     }
 }

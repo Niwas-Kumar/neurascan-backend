@@ -14,6 +14,7 @@ import com.google.cloud.firestore.QuerySnapshot;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.security.authentication.BadCredentialsException;
 
 import java.util.*;
 import java.util.concurrent.ExecutionException;
@@ -668,16 +669,16 @@ public class QuizAttemptService {
         }
 
         if (linkQuery.isEmpty()) {
-            throw new UnauthorizedAccessException("Invalid quiz attempt session");
+            throw new BadCredentialsException("Invalid quiz attempt session");
         }
 
         QuizLink link = linkQuery.getDocuments().get(0).toObject(QuizLink.class);
         if (link == null || link.isExpired() || (link.getExpiredAt() != null && link.getExpiredAt().before(new Date()))) {
-            throw new UnauthorizedAccessException("Quiz attempt session has expired");
+            throw new BadCredentialsException("Quiz attempt session has expired");
         }
 
         if (accessToken == null || accessToken.isBlank() || !Objects.equals(accessToken, link.getToken())) {
-            throw new UnauthorizedAccessException("Invalid quiz access token");
+            throw new BadCredentialsException("Invalid quiz access token");
         }
 
         if (!Objects.equals(link.getQuizId(), attempt.getQuizId())) {
@@ -718,17 +719,13 @@ public class QuizAttemptService {
                 .limit(1)
                 .get().get();
 
-        if (!relationshipQuery.isEmpty()) {
-            DocumentSnapshot rel = relationshipQuery.getDocuments().get(0);
-            return rel.getString("disconnectedAt") == null;
-        }
-
-        DocumentSnapshot parentDoc = firestore.collection("parents").document(parentId).get().get();
-        if (!parentDoc.exists()) {
+        if (relationshipQuery.isEmpty()) {
             return false;
         }
-        String linkedStudent = parentDoc.getString("studentId");
-        return linkedStudent != null && studentId.equals(linkedStudent);
+
+        DocumentSnapshot rel = relationshipQuery.getDocuments().get(0);
+        String disconnectedAt = rel.getString("disconnectedAt");
+        return disconnectedAt == null || disconnectedAt.isBlank();
     }
 
     private String normalizeRole(String role) {
