@@ -1,7 +1,7 @@
 package com.ai.learningdetection.entity;
 
+import com.google.cloud.firestore.annotation.Exclude;
 import lombok.*;
-import java.time.Instant;
 
 /**
  * Persistent relationship between a parent and student.
@@ -66,39 +66,56 @@ public class ParentStudentRelationship {
 
     /**
      * Whether this is the primary/default student for the parent.
+     * Field name in Firestore is "isPrimary", but Java Beans convention
+     * expects setter to be setPrimary() for boolean fields starting with "is".
      */
     @Builder.Default
-    private boolean isPrimary = false;
+    private boolean primary = false;
 
     // Denormalized fields for faster queries (avoid joins)
     private String studentName;
     private String studentClassName;
     private String studentRollNumber;
 
-    // Firestore computed fields (stored in doc but computed dynamically)
-    // These setters exist to prevent Firestore mapping warnings
-    private transient Boolean active;
-    private transient Boolean pending;
+    // ═══════════════════════════════════════════════════════════════════
+    // FIRESTORE COMPATIBILITY SETTERS
+    // These exist because Firestore documents have "active", "pending",
+    // "isPrimary" fields that need setters when deserializing.
+    // ═══════════════════════════════════════════════════════════════════
 
     /**
-     * Firestore calls setPrimary() for isPrimary field (Java Beans convention).
-     * Lombok generates setIsPrimary(), so we need this manual setter.
+     * Firestore compatibility: accepts "active" field from document.
+     * Value is ignored - we compute this from verificationStatus.
      */
-    public void setPrimary(boolean primary) {
-        this.isPrimary = primary;
-    }
-
     public void setActive(Boolean active) {
-        // Ignored - computed from isActive()
-    }
-
-    public void setPending(Boolean pending) {
-        // Ignored - computed from isPending()
+        // Ignored - computed by isActive()
     }
 
     /**
-     * Check if the relationship is currently active.
+     * Firestore compatibility: accepts "pending" field from document.
+     * Value is ignored - we compute this from verificationStatus.
      */
+    public void setPending(Boolean pending) {
+        // Ignored - computed by isPending()
+    }
+
+    /**
+     * Firestore compatibility: accepts "isPrimary" field from document.
+     * Maps to the "primary" field.
+     */
+    public void setIsPrimary(Boolean isPrimary) {
+        this.primary = isPrimary != null && isPrimary;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // COMPUTED PROPERTIES
+    // These are excluded from Firestore serialization to avoid conflicts.
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * Check if the relationship is currently active (verified and not disconnected).
+     */
+    @Exclude
     public boolean isActive() {
         return disconnectedAt == null && "VERIFIED".equals(verificationStatus);
     }
@@ -106,7 +123,15 @@ public class ParentStudentRelationship {
     /**
      * Check if verification is still pending.
      */
+    @Exclude
     public boolean isPending() {
         return "PENDING".equals(verificationStatus);
+    }
+
+    /**
+     * Alias for isPrimary() to match field naming convention.
+     */
+    public boolean isPrimary() {
+        return primary;
     }
 }
