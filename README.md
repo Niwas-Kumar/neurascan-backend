@@ -18,8 +18,37 @@
 
 ---
 
+## 📖 About
+
+**NeuraScan** is an AI-powered SaaS platform built to help **teachers and parents detect learning disorders early** — specifically dyslexia and dysgraphia — in school-age children. Early identification is critical: research shows that children diagnosed before age 8 have significantly better long-term outcomes, yet most schools lack the tools or expertise to screen at scale.
+
+This repository contains the **Spring Boot 3 backend**, a production-grade REST API that serves as the core engine of the NeuraScan platform. It handles everything from secure multi-role authentication and student management to routing handwriting samples to a Python AI microservice and delivering structured analysis reports to educators and parents.
+
+### Why NeuraScan?
+
+| Challenge | NeuraScan's Answer |
+|---|---|
+| Manual, slow disorder screening | Automated AI analysis of handwriting samples in seconds |
+| No visibility for parents | Parent portal with real-time progress reports |
+| Siloed classroom data | Teacher dashboard with cross-student analytics |
+| Complex onboarding | Google Sign-In + OTP verification in one flow |
+| Deployment friction | Docker-ready, one-click deploy to Render |
+
+### Key Highlights
+
+- 🔐 **Dual-role security** — separate JWT-secured flows for teachers and parents, plus Google OAuth via Firebase
+- 🤖 **AI integration** — seamless HTTP bridge to a Python FastAPI microservice for dyslexia & dysgraphia scoring
+- 📊 **Rich reporting** — per-student analysis history, risk levels, and classroom-wide dashboards
+- 📝 **Adaptive quizzes** — teachers create and distribute assessments via shareable links
+- 📧 **Transactional email** — OTP verification and password reset powered by SendGrid
+- 🚩 **Feature flags** — all advanced features toggle via environment variables, enabling safe incremental rollouts
+- 🐳 **Cloud-native** — multi-stage Dockerfile, Render deployment guide, Firestore as the primary database (no SQL setup required)
+
+---
+
 ## 📋 Table of Contents
 
+- [About](#-about)
 - [Overview](#-overview)
 - [Features](#-features)
 - [Architecture](#-architecture)
