@@ -38,5 +38,6 @@ public class Quiz {
         private String category;
         private String screeningTarget;
         private String difficulty;
+        private String questionType;
     }
 }

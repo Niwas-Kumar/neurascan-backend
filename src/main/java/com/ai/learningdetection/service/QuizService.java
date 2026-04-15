@@ -53,6 +53,7 @@ public class QuizService {
                             .category((String) q.getOrDefault("category", ""))
                             .screeningTarget((String) q.getOrDefault("screeningTarget", ""))
                             .difficulty((String) q.getOrDefault("difficulty", "medium"))
+                            .questionType((String) q.getOrDefault("questionType", "MCQ"))
                             .build());
                 }
             }
@@ -82,6 +83,7 @@ public class QuizService {
                             .category(q.getCategory())
                             .screeningTarget(q.getScreeningTarget())
                             .difficulty(q.getDifficulty())
+                            .questionType(q.getQuestionType())
                             .build()).collect(Collectors.toList()))
                     .build();
 
@@ -235,6 +237,7 @@ public class QuizService {
                 .category(category)
                 .screeningTarget(screeningTarget)
                 .difficulty(difficulty)
+                .questionType("MCQ")
                 .build();
     }
 
@@ -260,6 +263,7 @@ public class QuizService {
                                 .category(qu.getCategory())
                                 .screeningTarget(qu.getScreeningTarget())
                                 .difficulty(qu.getDifficulty())
+                                .questionType(qu.getQuestionType())
                                 .build()).collect(Collectors.toList()))
                         .build();
             }).collect(Collectors.toList());
@@ -294,6 +298,7 @@ public class QuizService {
                             .category(qu.getCategory())
                             .screeningTarget(qu.getScreeningTarget())
                             .difficulty(qu.getDifficulty())
+                            .questionType(qu.getQuestionType())
                             .build()).collect(Collectors.toList()))
                     .build();
 
