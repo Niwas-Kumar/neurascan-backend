@@ -70,7 +70,7 @@ public class QuizAttemptService {
                 String docQuizId = doc.getString("quizId");
                 if (!quizId.equals(docQuizId)) continue;
 
-                Boolean isCompleted = doc.getBoolean("isCompleted");
+                Boolean isCompleted = doc.getBoolean("completed");
                 if (Boolean.TRUE.equals(isCompleted)) {
                     log.warn("⛔ Blocked duplicate attempt for quiz: {} token: {}...", quizId, token.substring(0, 8));
                     throw new IllegalStateException("This quiz has already been completed. Only one attempt is allowed.");

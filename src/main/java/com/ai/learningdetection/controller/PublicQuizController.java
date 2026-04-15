@@ -78,7 +78,7 @@ public class PublicQuizController {
                 DocumentSnapshot existingAttempt = firestore.collection("quiz_attempts")
                         .document(link.getQuizAttemptId()).get().get();
                 if (existingAttempt.exists()) {
-                    Boolean isCompleted = existingAttempt.getBoolean("isCompleted");
+                    Boolean isCompleted = existingAttempt.getBoolean("completed");
                     if (Boolean.TRUE.equals(isCompleted)) {
                         Double score = existingAttempt.getDouble("score");
                         log.info("⚠️ Quiz already attempted by: {}", link.getRecipientEmail());
@@ -101,7 +101,7 @@ public class PublicQuizController {
                     .get().get();
             for (DocumentSnapshot attemptDoc : attemptsByToken.getDocuments()) {
                 String attemptQuizId = attemptDoc.getString("quizId");
-                Boolean isCompleted = attemptDoc.getBoolean("isCompleted");
+                Boolean isCompleted = attemptDoc.getBoolean("completed");
                 if (quizId.equals(attemptQuizId) && Boolean.TRUE.equals(isCompleted)) {
                     Double score = attemptDoc.getDouble("score");
                     log.info("⚠️ Quiz already attempted (fallback check) by: {}", link.getRecipientEmail());
