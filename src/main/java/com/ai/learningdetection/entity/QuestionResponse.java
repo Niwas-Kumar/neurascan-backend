@@ -34,4 +34,9 @@ public class QuestionResponse {
     // Analysis
     private String confidenceLevel;     // high, medium, low - inferred from response time
     private String explanationNote;     // Any AI-generated explanation
+
+    // Custom setter for Firestore deserialization compatibility
+    public void setCorrect(boolean correct) {
+        this.isCorrect = correct;
+    }
 }

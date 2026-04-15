@@ -36,4 +36,9 @@ public class QuizLink {
     // Admin Fields
     private String teacherId;           // Who sent the link
     private String classId;
+
+    // Custom setter for Firestore deserialization compatibility
+    public void setExpired(boolean expired) {
+        this.isExpired = expired;
+    }
 }

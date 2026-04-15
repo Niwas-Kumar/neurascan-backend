@@ -43,5 +43,11 @@ public class QuizAttempt {
     // Learning Progress
     private String learningGapSummary;  // Short summary from AI analysis
     private List<String> strongAreas;   // Topics/areas student did well in
+
+    // Custom setters for Firestore deserialization compatibility
+    // Firestore stores boolean "isX" fields as "x" and looks for setX() setter
+    public void setCompleted(boolean completed) {
+        this.isCompleted = completed;
+    }
     private List<String> weakAreas;     // Topics/areas needing improvement
 }
