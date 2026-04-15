@@ -118,4 +118,22 @@ public class AnalysisController {
                 ApiResponse.success(progress, "Progress data retrieved successfully"));
     }
 
+    /**
+     * GET /api/analysis/comprehensive/{studentId}
+     * Parent retrieves a comprehensive report that fuses handwriting analysis + quiz screening.
+     * This is purely additive — all existing endpoints remain unchanged.
+     */
+    @GetMapping("/comprehensive/{studentId}")
+    @PreAuthorize("hasRole('PARENT')")
+    public ResponseEntity<ApiResponse<AnalysisDTOs.ComprehensiveReportResponse>> getComprehensiveReport(
+            @PathVariable String studentId,
+            @AuthenticationPrincipal IdentifiablePrincipal principal) {
+
+        AnalysisDTOs.ComprehensiveReportResponse report =
+                analysisService.getComprehensiveReport(studentId, principal.getId());
+
+        return ResponseEntity.ok(
+                ApiResponse.success(report, "Comprehensive report retrieved successfully"));
+    }
+
 }

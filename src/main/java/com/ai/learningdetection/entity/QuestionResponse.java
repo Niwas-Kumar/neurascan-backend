@@ -31,6 +31,10 @@ public class QuestionResponse {
     private long responseTimeMs;        // How long student took to answer (milliseconds)
     private Date answeredAt;
     
+    // Screening category (from quiz question)
+    private String category;            // e.g. letter_discrimination, phoneme_awareness
+    private String screeningTarget;     // DYSLEXIA or DYSGRAPHIA
+
     // Analysis
     private String confidenceLevel;     // high, medium, low - inferred from response time
     private String explanationNote;     // Any AI-generated explanation

@@ -75,5 +75,65 @@ public class AnalysisDTOs {
         private List<AnalysisReportResponse> reports;
         private String trend;
     }
+
+    /**
+     * Comprehensive report that fuses handwriting analysis + quiz screening data
+     * for a single student. Used by the parent dashboard to show combined risk assessment.
+     */
+    @Data
+    @Builder
+    @AllArgsConstructor
+    @NoArgsConstructor
+    public static class ComprehensiveReportResponse {
+        // Student info
+        private String studentId;
+        private String studentName;
+        private String className;
+
+        // Latest handwriting analysis (unchanged — same data as AnalysisReportResponse)
+        private AnalysisReportResponse latestHandwritingReport;
+
+        // Quiz screening data (from AI analysis of quiz attempts)
+        private QuizScreeningData quizScreening;
+
+        // Combined/fused risk scores
+        private FusedRiskAssessment fusedAssessment;
+
+        // Historical trend
+        private String trend;
+    }
+
+    @Data
+    @Builder
+    @AllArgsConstructor
+    @NoArgsConstructor
+    public static class QuizScreeningData {
+        private boolean hasQuizData;
+        private int totalAttempts;
+        private Double latestQuizScore;       // Quiz performance score (0-100)
+        private Double dyslexiaRiskScore;     // From AI screening (0-100)
+        private String dyslexiaRisk;          // HIGH / MODERATE / LOW
+        private Double dysgraphiaRiskScore;   // From AI screening (0-100)
+        private String dysgraphiaRisk;        // HIGH / MODERATE / LOW
+        private String learningGapSummary;
+        private java.util.List<String> strongAreas;
+        private java.util.List<String> weakAreas;
+        private Object clinicalFeatures;      // Response time CV, speed-accuracy tradeoff, etc.
+    }
+
+    @Data
+    @Builder
+    @AllArgsConstructor
+    @NoArgsConstructor
+    public static class FusedRiskAssessment {
+        private boolean hasBothSignals;       // true if both handwriting + quiz data available
+        private Double fusedDyslexiaScore;    // Weighted combination (0-100)
+        private String fusedDyslexiaRisk;     // HIGH / MODERATE / LOW
+        private Double fusedDysgraphiaScore;  // Weighted combination (0-100)
+        private String fusedDysgraphiaRisk;   // HIGH / MODERATE / LOW
+        private String fusionMethod;          // "two_signal" or "handwriting_only" or "quiz_only"
+        private String methodology;           // Human-readable description
+        private java.util.List<String> recommendations;
+    }
 }
 

@@ -242,6 +242,82 @@ public class AiIntegrationService {
             return java.util.Map.of("questions", java.util.Collections.emptyList());
         }
     }
+
+    /**
+     * Send quiz attempt data to AI service for evidence-based screening analysis.
+     * Extracts clinical features (response timing patterns, per-category accuracy)
+     * and returns dyslexia/dysgraphia risk scores.
+     */
+    @SuppressWarnings("unchecked")
+    public java.util.Map<String, Object> analyzeQuizAttempt(java.util.Map<String, Object> analysisData) {
+        String quizAnalyzeUrl = aiServiceUrl.replaceAll("/analyze$", "/quiz/analyze");
+        if (!quizAnalyzeUrl.contains("/quiz/analyze")) {
+            quizAnalyzeUrl = aiServiceUrl + "/quiz/analyze";
+        }
+
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+
+            HttpEntity<java.util.Map<String, Object>> requestEntity =
+                    new HttpEntity<>(analysisData, headers);
+
+            ResponseEntity<java.util.Map> response = restTemplate.postForEntity(
+                    quizAnalyzeUrl,
+                    requestEntity,
+                    java.util.Map.class
+            );
+
+            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
+                log.info("Quiz AI analysis complete for attempt: {}", analysisData.get("attemptId"));
+                return response.getBody();
+            }
+
+            log.warn("Quiz analysis service returned non-OK: {}", response.getStatusCode());
+            return java.util.Collections.emptyMap();
+
+        } catch (Exception ex) {
+            log.warn("Quiz AI analysis failed: {}", ex.getMessage());
+            return java.util.Collections.emptyMap();
+        }
+    }
+
+    /**
+     * Call the combined analysis endpoint to fuse handwriting + quiz scores.
+     */
+    @SuppressWarnings("unchecked")
+    public java.util.Map<String, Object> analyzeCombined(java.util.Map<String, Object> fusionData) {
+        String combinedUrl = aiServiceUrl.replaceAll("/analyze$", "/analyze/combined");
+        if (!combinedUrl.contains("/analyze/combined")) {
+            combinedUrl = aiServiceUrl + "/analyze/combined";
+        }
+
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+
+            HttpEntity<java.util.Map<String, Object>> requestEntity =
+                    new HttpEntity<>(fusionData, headers);
+
+            ResponseEntity<java.util.Map> response = restTemplate.postForEntity(
+                    combinedUrl,
+                    requestEntity,
+                    java.util.Map.class
+            );
+
+            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
+                log.info("Combined analysis complete");
+                return response.getBody();
+            }
+
+            log.warn("Combined analysis service returned non-OK: {}", response.getStatusCode());
+            return java.util.Collections.emptyMap();
+
+        } catch (Exception ex) {
+            log.warn("Combined analysis failed: {}", ex.getMessage());
+            return java.util.Collections.emptyMap();
+        }
+    }
 }
 
 

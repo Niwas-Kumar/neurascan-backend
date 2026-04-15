@@ -39,6 +39,7 @@ public class QuizAttempt {
     private String aiAnalysisId;        // Reference to AI analysis results
     private boolean sentToAiModel;      // Track if result was sent to AI
     private Date aiAnalysisDate;
+    private Object aiAnalysisResult;    // Screening analysis (dyslexia/dysgraphia risk scores)
     
     // Learning Progress
     private String learningGapSummary;  // Short summary from AI analysis

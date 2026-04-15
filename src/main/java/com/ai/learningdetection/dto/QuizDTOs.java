@@ -118,6 +118,7 @@ public class QuizDTOs {
         private String learningGapSummary;
         private List<String> strongAreas;
         private List<String> weakAreas;
+        private Object aiAnalysisResult;  // Screening analysis (dyslexia/dysgraphia risk scores)
     }
 
     @Data

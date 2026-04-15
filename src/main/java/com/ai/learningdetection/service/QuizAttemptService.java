@@ -194,6 +194,8 @@ public class QuizAttemptService {
                     .responseTimeMs(request.getResponseTimeMs())
                     .answeredAt(new Date())
                     .confidenceLevel(confidenceLevel)
+                    .category(question.getCategory())
+                    .screeningTarget(question.getScreeningTarget())
                     .build();
             
             responseRef.set(qResponse).get();
@@ -501,6 +503,7 @@ public class QuizAttemptService {
                 .learningGapSummary(attempt.getLearningGapSummary())
                 .strongAreas(attempt.getStrongAreas())
                 .weakAreas(attempt.getWeakAreas())
+                .aiAnalysisResult(attempt.getAiAnalysisResult())
                 .build();
     }
 
@@ -586,25 +589,52 @@ public class QuizAttemptService {
 
     private void analyzeQuizAttempt(QuizAttempt attempt) {
         try {
-            // Send to AI model for analysis
             log.info("🤖 Sending quiz attempt to AI model for analysis: {}", attempt.getId());
-            
-            // This would integrate with your AI service
+
             Map<String, Object> analysisData = prepareAnalysisData(attempt);
-            // aiIntegrationService.analyzeQuizAttempt(analysisData);
-            
+            Map<String, Object> aiResult = aiIntegrationService.analyzeQuizAttempt(analysisData);
+
+            if (aiResult != null && !aiResult.isEmpty()) {
+                // Populate learning insights from AI response
+                if (aiResult.containsKey("learningGapSummary")) {
+                    attempt.setLearningGapSummary((String) aiResult.get("learningGapSummary"));
+                }
+                if (aiResult.containsKey("strongAreas")) {
+                    attempt.setStrongAreas((java.util.List<String>) aiResult.get("strongAreas"));
+                }
+                if (aiResult.containsKey("weakAreas")) {
+                    attempt.setWeakAreas((java.util.List<String>) aiResult.get("weakAreas"));
+                }
+                // Store the screening analysis (dyslexia/dysgraphia risk scores)
+                if (aiResult.containsKey("screeningAnalysis")) {
+                    attempt.setAiAnalysisResult(aiResult.get("screeningAnalysis"));
+                }
+            }
+
             attempt.setSentToAiModel(true);
             attempt.setAiAnalysisDate(new Date());
-            
+
             firestore.collection(QUIZ_ATTEMPTS_COLLECTION)
                     .document(attempt.getId())
                     .set(attempt)
                     .get();
         } catch (Exception e) {
             log.warn("⚠️ Could not send quiz to AI model: {}", e.getMessage());
+            // Still mark as attempted so we don't retry in a loop
+            try {
+                attempt.setSentToAiModel(true);
+                attempt.setAiAnalysisDate(new Date());
+                firestore.collection(QUIZ_ATTEMPTS_COLLECTION)
+                        .document(attempt.getId())
+                        .set(attempt)
+                        .get();
+            } catch (Exception ex) {
+                log.error("Failed to update attempt after AI failure: {}", ex.getMessage());
+            }
         }
     }
 
+    @SuppressWarnings("unchecked")
     private Map<String, Object> prepareAnalysisData(QuizAttempt attempt) {
         Map<String, Object> data = new HashMap<>();
         data.put("attemptId", attempt.getId());
@@ -613,6 +643,51 @@ public class QuizAttemptService {
         data.put("correctAnswers", attempt.getCorrectAnswers());
         data.put("totalQuestions", attempt.getTotalQuestions());
         data.put("totalTimeMs", attempt.getTotalTimeSpentMs());
+
+        // Fetch quiz to get topic
+        try {
+            DocumentSnapshot quizSnap = firestore.collection(QUIZZES_COLLECTION)
+                    .document(attempt.getQuizId()).get().get();
+            if (quizSnap.exists()) {
+                Quiz quiz = quizSnap.toObject(Quiz.class);
+                if (quiz != null) {
+                    data.put("topic", quiz.getTopic() != null ? quiz.getTopic() : "General");
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Could not fetch quiz topic: {}", e.getMessage());
+            data.put("topic", "General");
+        }
+
+        // Fetch question responses with category data for clinical scoring
+        java.util.List<Map<String, Object>> questionResponses = new java.util.ArrayList<>();
+        if (attempt.getQuestionResponseIds() != null) {
+            for (String respId : attempt.getQuestionResponseIds()) {
+                try {
+                    DocumentSnapshot respSnap = firestore.collection(QUESTION_RESPONSES_COLLECTION)
+                            .document(respId).get().get();
+                    if (respSnap.exists()) {
+                        QuestionResponse qr = respSnap.toObject(QuestionResponse.class);
+                        if (qr != null) {
+                            Map<String, Object> qrData = new HashMap<>();
+                            qrData.put("questionId", qr.getQuestionId());
+                            qrData.put("questionText", qr.getQuestionText());
+                            qrData.put("correctAnswer", qr.getCorrectAnswer());
+                            qrData.put("studentAnswer", qr.getStudentAnswer());
+                            qrData.put("isCorrect", qr.isCorrect());
+                            qrData.put("responseTimeMs", qr.getResponseTimeMs());
+                            qrData.put("category", qr.getCategory());
+                            qrData.put("screeningTarget", qr.getScreeningTarget());
+                            questionResponses.add(qrData);
+                        }
+                    }
+                } catch (Exception e) {
+                    log.warn("Failed to fetch question response {}: {}", respId, e.getMessage());
+                }
+            }
+        }
+        data.put("questionResponses", questionResponses);
+
         return data;
     }
 
@@ -633,6 +708,7 @@ public class QuizAttemptService {
                 .learningGapSummary(attempt.getLearningGapSummary())
                 .strongAreas(attempt.getStrongAreas())
                 .weakAreas(attempt.getWeakAreas())
+                .aiAnalysisResult(attempt.getAiAnalysisResult())
                 .build();
     }
 

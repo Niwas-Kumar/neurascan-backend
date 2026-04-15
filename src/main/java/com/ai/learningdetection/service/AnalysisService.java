@@ -4,6 +4,7 @@ import com.ai.learningdetection.dto.AnalysisDTOs;
 import com.ai.learningdetection.entity.AnalysisReport;
 import com.ai.learningdetection.entity.TestPaper;
 import com.ai.learningdetection.entity.Student;
+import com.ai.learningdetection.entity.QuizAttempt;
 import com.ai.learningdetection.exception.ResourceNotFoundException;
 import com.ai.learningdetection.exception.ImageValidationException;
 import com.ai.learningdetection.exception.UnauthorizedAccessException;
@@ -523,5 +524,240 @@ public class AnalysisService {
             log.error("Error converting report to response: {}", e.getMessage());
             return AnalysisDTOs.AnalysisReportResponse.builder().reportId(report.getId()).aiComment("Error loading full report details").build();
         }
+    }
+
+    // ============================================================
+    // PARENT: Comprehensive Report (Handwriting + Quiz Fusion)
+    // ============================================================
+
+    private static final String QUIZ_ATTEMPTS_COLLECTION = "quiz_attempts";
+
+    /**
+     * Fetches the latest handwriting analysis AND quiz screening data for one student,
+     * then fuses them into a single comprehensive risk assessment.
+     * All existing endpoints remain exactly as they were — this is purely additive.
+     */
+    @SuppressWarnings("unchecked")
+    public AnalysisDTOs.ComprehensiveReportResponse getComprehensiveReport(String studentId, String parentId) {
+        try {
+            verifyParentOwnsStudent(parentId, studentId);
+
+            DocumentSnapshot studentSnap = firestore.collection(STUDENTS_COLLECTION).document(studentId).get().get();
+            String studentName = studentSnap.exists() ? studentSnap.getString("name") : "Unknown Student";
+            String className = studentSnap.exists() ? studentSnap.getString("className") : "N/A";
+
+            // ── Signal 1: Latest handwriting analysis (existing logic, unchanged) ──
+            AnalysisDTOs.AnalysisReportResponse latestReport = null;
+            Double hwDyslexia = null;
+            Double hwDysgraphia = null;
+
+            QuerySnapshot papers = firestore.collection(PAPERS_COLLECTION)
+                    .whereEqualTo("studentId", studentId).get().get();
+            List<String> paperIds = papers.getDocuments().stream()
+                    .map(DocumentSnapshot::getId).collect(Collectors.toList());
+
+            if (!paperIds.isEmpty()) {
+                List<AnalysisReport> reports = runBatchedWhereInQuery(
+                        firestore.collection(REPORTS_COLLECTION), "paperId", paperIds, AnalysisReport.class);
+
+                if (!reports.isEmpty()) {
+                    reports.sort((r1, r2) -> {
+                        if (r1.getCreatedAt() == null || r2.getCreatedAt() == null) return 0;
+                        return r2.getCreatedAt().compareTo(r1.getCreatedAt());
+                    });
+                    latestReport = toReportResponse(reports.get(0));
+                    hwDyslexia = reports.get(0).getDyslexiaScore();
+                    hwDysgraphia = reports.get(0).getDysgraphiaScore();
+                }
+            }
+
+            String trend = "INSUFFICIENT_DATA";
+            if (latestReport != null && !paperIds.isEmpty()) {
+                List<AnalysisReport> allReports = runBatchedWhereInQuery(
+                        firestore.collection(REPORTS_COLLECTION), "paperId", paperIds, AnalysisReport.class);
+                allReports.sort((r1, r2) -> {
+                    if (r1.getCreatedAt() == null || r2.getCreatedAt() == null) return 0;
+                    return r2.getCreatedAt().compareTo(r1.getCreatedAt());
+                });
+                trend = calculateTrend(allReports);
+            }
+
+            // ── Signal 2: Latest quiz screening data ──
+            AnalysisDTOs.QuizScreeningData quizScreening = AnalysisDTOs.QuizScreeningData.builder()
+                    .hasQuizData(false)
+                    .totalAttempts(0)
+                    .build();
+
+            Double quizDyslexia = null;
+            Double quizDysgraphia = null;
+
+            QuerySnapshot quizAttempts = firestore.collection(QUIZ_ATTEMPTS_COLLECTION)
+                    .whereEqualTo("studentId", studentId)
+                    .whereEqualTo("completed", true)
+                    .get().get();
+
+            List<QuizAttempt> completedAttempts = quizAttempts.toObjects(QuizAttempt.class)
+                    .stream().collect(Collectors.toList());
+
+            if (!completedAttempts.isEmpty()) {
+                // Sort by completedAt descending
+                completedAttempts.sort((a, b) -> {
+                    if (a.getCompletedAt() == null || b.getCompletedAt() == null) return 0;
+                    return b.getCompletedAt().compareTo(a.getCompletedAt());
+                });
+
+                QuizAttempt latestAttempt = completedAttempts.get(0);
+                Object aiResult = latestAttempt.getAiAnalysisResult();
+
+                AnalysisDTOs.QuizScreeningData.QuizScreeningDataBuilder qb = AnalysisDTOs.QuizScreeningData.builder()
+                        .hasQuizData(true)
+                        .totalAttempts(completedAttempts.size())
+                        .latestQuizScore(latestAttempt.getScore())
+                        .learningGapSummary(latestAttempt.getLearningGapSummary())
+                        .strongAreas(latestAttempt.getStrongAreas())
+                        .weakAreas(latestAttempt.getWeakAreas());
+
+                // Extract AI screening scores if available
+                if (aiResult instanceof java.util.Map) {
+                    java.util.Map<String, Object> screening = (java.util.Map<String, Object>) aiResult;
+                    java.util.Map<String, Object> indicators = (java.util.Map<String, Object>) screening.get("indicators");
+
+                    if (indicators != null) {
+                        qb.dyslexiaRisk(getStringFromMap(indicators, "dyslexiaRisk"));
+                        qb.dysgraphiaRisk(getStringFromMap(indicators, "dysgraphiaRisk"));
+
+                        Double dScore = getDoubleFromMap(indicators, "dyslexiaScore");
+                        Double gScore = getDoubleFromMap(indicators, "dysgraphiaScore");
+                        qb.dyslexiaRiskScore(dScore);
+                        qb.dysgraphiaRiskScore(gScore);
+                        quizDyslexia = dScore;
+                        quizDysgraphia = gScore;
+
+                        qb.clinicalFeatures(indicators.get("clinicalFeatures"));
+                    }
+                }
+
+                quizScreening = qb.build();
+            }
+
+            // ── Fuse signals ──
+            AnalysisDTOs.FusedRiskAssessment fused = computeFusedAssessment(
+                    hwDyslexia, hwDysgraphia, quizDyslexia, quizDysgraphia);
+
+            return AnalysisDTOs.ComprehensiveReportResponse.builder()
+                    .studentId(studentId)
+                    .studentName(studentName)
+                    .className(className)
+                    .latestHandwritingReport(latestReport)
+                    .quizScreening(quizScreening)
+                    .fusedAssessment(fused)
+                    .trend(trend)
+                    .build();
+
+        } catch (InterruptedException | ExecutionException e) {
+            throw new RuntimeException("Firestore error fetching comprehensive report", e);
+        }
+    }
+
+    /**
+     * Compute fused risk assessment from handwriting + quiz scores.
+     * Weights: Quiz 50%, Handwriting 30%, Historical 20% (historical not yet available, redistributed).
+     * When only one signal is available, that signal is used at 100%.
+     */
+    private AnalysisDTOs.FusedRiskAssessment computeFusedAssessment(
+            Double hwDyslexia, Double hwDysgraphia,
+            Double quizDyslexia, Double quizDysgraphia) {
+
+        boolean hasHw = hwDyslexia != null;
+        boolean hasQuiz = quizDyslexia != null;
+        boolean hasBoth = hasHw && hasQuiz;
+
+        Double fusedDyslexia = null;
+        Double fusedDysgraphia = null;
+        String method;
+        String methodology;
+
+        if (hasBoth) {
+            // Two-signal fusion: Quiz 62.5%, Handwriting 37.5% (redistributed from 50/30/20)
+            fusedDyslexia = (quizDyslexia * 0.625) + (hwDyslexia * 0.375);
+            fusedDysgraphia = (quizDysgraphia != null ? quizDysgraphia * 0.625 : 0)
+                    + (hwDysgraphia != null ? hwDysgraphia * 0.375 : 0);
+            method = "two_signal";
+            methodology = "Multi-modal fusion: Quiz performance (62.5%) + Handwriting analysis (37.5%). Based on Rello et al. (2020) feature importance.";
+        } else if (hasQuiz) {
+            fusedDyslexia = quizDyslexia;
+            fusedDysgraphia = quizDysgraphia != null ? quizDysgraphia : 0.0;
+            method = "quiz_only";
+            methodology = "Quiz-based screening only. Upload a handwriting sample for a more comprehensive assessment.";
+        } else if (hasHw) {
+            fusedDyslexia = hwDyslexia;
+            fusedDysgraphia = hwDysgraphia != null ? hwDysgraphia : 0.0;
+            method = "handwriting_only";
+            methodology = "Handwriting analysis only. Complete a screening quiz for a more comprehensive assessment.";
+        } else {
+            method = "none";
+            methodology = "No assessment data available yet.";
+        }
+
+        // Clamp scores
+        if (fusedDyslexia != null) fusedDyslexia = Math.max(0, Math.min(100, fusedDyslexia));
+        if (fusedDysgraphia != null) fusedDysgraphia = Math.max(0, Math.min(100, fusedDysgraphia));
+
+        // Recommendations
+        List<String> recommendations = new ArrayList<>();
+        if (fusedDyslexia != null) {
+            if (fusedDyslexia >= 60) {
+                recommendations.add("HIGH dyslexia risk detected. Professional educational psychologist evaluation strongly recommended.");
+            } else if (fusedDyslexia >= 35) {
+                recommendations.add("Moderate dyslexia indicators present. Consider formal screening and targeted reading support.");
+            }
+        }
+        if (fusedDysgraphia != null) {
+            if (fusedDysgraphia >= 60) {
+                recommendations.add("HIGH dysgraphia risk detected. Occupational therapy referral recommended.");
+            } else if (fusedDysgraphia >= 35) {
+                recommendations.add("Moderate dysgraphia indicators. Monitor writing development and consider fine motor exercises.");
+            }
+        }
+        if (!hasBoth && (hasHw || hasQuiz)) {
+            recommendations.add(hasHw
+                    ? "Complete a screening quiz to improve assessment accuracy."
+                    : "Upload a handwriting sample to improve assessment accuracy.");
+        }
+        if (recommendations.isEmpty()) {
+            recommendations.add("Scores within typical range. Continue regular monitoring.");
+        }
+
+        return AnalysisDTOs.FusedRiskAssessment.builder()
+                .hasBothSignals(hasBoth)
+                .fusedDyslexiaScore(fusedDyslexia)
+                .fusedDyslexiaRisk(riskLabel(fusedDyslexia))
+                .fusedDysgraphiaScore(fusedDysgraphia)
+                .fusedDysgraphiaRisk(riskLabel(fusedDysgraphia))
+                .fusionMethod(method)
+                .methodology(methodology)
+                .recommendations(recommendations)
+                .build();
+    }
+
+    private static String riskLabel(Double score) {
+        if (score == null) return "PENDING";
+        if (score >= 60) return "HIGH";
+        if (score >= 35) return "MEDIUM";
+        return "LOW";
+    }
+
+    private static String getStringFromMap(java.util.Map<String, Object> map, String key) {
+        Object val = map.get(key);
+        return val != null ? val.toString() : null;
+    }
+
+    private static Double getDoubleFromMap(java.util.Map<String, Object> map, String key) {
+        Object val = map.get(key);
+        if (val instanceof Number) return ((Number) val).doubleValue();
+        if (val instanceof String) {
+            try { return Double.parseDouble((String) val); } catch (NumberFormatException e) { return null; }
+        }
+        return null;
     }
 }
