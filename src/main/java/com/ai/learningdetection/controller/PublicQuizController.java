@@ -73,6 +73,7 @@ public class PublicQuizController {
             }
 
             // Check if already attempted (single-attempt enforcement)
+            // Primary check: via link's quizAttemptId (direct doc lookup, no index needed)
             if (link.getQuizAttemptId() != null && !link.getQuizAttemptId().isBlank()) {
                 DocumentSnapshot existingAttempt = firestore.collection("quiz_attempts")
                         .document(link.getQuizAttemptId()).get().get();
@@ -90,6 +91,28 @@ public class PublicQuizController {
                                 .build();
                         return ResponseEntity.ok(ApiResponse.success(alreadyDone, "Quiz already attempted"));
                     }
+                }
+            }
+
+            // Fallback check: query quiz_attempts by token (single-field, auto-indexed)
+            // Catches cases where link.quizAttemptId wasn't set (old attempts, race conditions)
+            QuerySnapshot attemptsByToken = firestore.collection("quiz_attempts")
+                    .whereEqualTo("attemptToken", token)
+                    .get().get();
+            for (DocumentSnapshot attemptDoc : attemptsByToken.getDocuments()) {
+                String attemptQuizId = attemptDoc.getString("quizId");
+                Boolean isCompleted = attemptDoc.getBoolean("isCompleted");
+                if (quizId.equals(attemptQuizId) && Boolean.TRUE.equals(isCompleted)) {
+                    Double score = attemptDoc.getDouble("score");
+                    log.info("⚠️ Quiz already attempted (fallback check) by: {}", link.getRecipientEmail());
+                    QuizDTOs.QuizAttemptStartResponse alreadyDone = QuizDTOs.QuizAttemptStartResponse.builder()
+                            .quizId(quizId)
+                            .valid(false)
+                            .alreadyAttempted(true)
+                            .completedScore(score)
+                            .message("You have already completed this quiz. Only one attempt is allowed.")
+                            .build();
+                    return ResponseEntity.ok(ApiResponse.success(alreadyDone, "Quiz already attempted"));
                 }
             }
 

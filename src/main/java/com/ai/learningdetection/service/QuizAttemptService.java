@@ -61,28 +61,25 @@ public class QuizAttemptService {
             validateQuizLink(quizId, token);
 
             // ── Single-attempt enforcement ──
-            // Check if a completed attempt already exists for this quiz + token
+            // Use single-field query on attemptToken (auto-indexed, no composite index needed)
             QuerySnapshot existingAttempts = firestore.collection(QUIZ_ATTEMPTS_COLLECTION)
-                    .whereEqualTo("quizId", quizId)
                     .whereEqualTo("attemptToken", token)
-                    .whereEqualTo("isCompleted", true)
-                    .limit(1)
                     .get().get();
-            if (!existingAttempts.isEmpty()) {
-                throw new IllegalStateException("This quiz has already been completed. Only one attempt is allowed.");
-            }
 
-            // Also check for in-progress attempts — resume instead of creating a new one
-            QuerySnapshot inProgressAttempts = firestore.collection(QUIZ_ATTEMPTS_COLLECTION)
-                    .whereEqualTo("quizId", quizId)
-                    .whereEqualTo("attemptToken", token)
-                    .whereEqualTo("isCompleted", false)
-                    .limit(1)
-                    .get().get();
-            if (!inProgressAttempts.isEmpty()) {
-                QuizAttempt existing = inProgressAttempts.getDocuments().get(0).toObject(QuizAttempt.class);
-                log.info("🔄 Resuming existing attempt: {} for quiz: {}", existing.getId(), quizId);
-                return convertToAttemptDetail(existing);
+            for (DocumentSnapshot doc : existingAttempts.getDocuments()) {
+                String docQuizId = doc.getString("quizId");
+                if (!quizId.equals(docQuizId)) continue;
+
+                Boolean isCompleted = doc.getBoolean("isCompleted");
+                if (Boolean.TRUE.equals(isCompleted)) {
+                    log.warn("⛔ Blocked duplicate attempt for quiz: {} token: {}...", quizId, token.substring(0, 8));
+                    throw new IllegalStateException("This quiz has already been completed. Only one attempt is allowed.");
+                } else {
+                    // Resume existing in-progress attempt
+                    QuizAttempt existing = doc.toObject(QuizAttempt.class);
+                    log.info("🔄 Resuming existing attempt: {} for quiz: {}", existing.getId(), quizId);
+                    return convertToAttemptDetail(existing);
+                }
             }
 
             // Create new quiz attempt
