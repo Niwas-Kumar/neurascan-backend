@@ -314,6 +314,27 @@ public class ParentStudentService {
                 if (rel == null || rel.getDisconnectedAt() != null) continue;
 
                 ConnectedStudentResponse student = mapToConnectedStudent(rel);
+
+                // Look up teacher name from student record
+                try {
+                    if (rel.getStudentId() != null) {
+                        DocumentSnapshot studentSnap = firestore.collection("students")
+                                .document(rel.getStudentId()).get().get();
+                        if (studentSnap.exists()) {
+                            String teacherId = studentSnap.getString("teacherId");
+                            if (teacherId != null) {
+                                DocumentSnapshot teacherSnap = firestore.collection("teachers")
+                                        .document(teacherId).get().get();
+                                if (teacherSnap.exists()) {
+                                    student.setTeacherName(teacherSnap.getString("name"));
+                                }
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    log.debug("Could not look up teacher for student {}: {}", rel.getStudentId(), e.getMessage());
+                }
+
                 students.add(student);
 
                 if ("VERIFIED".equals(rel.getVerificationStatus())) {

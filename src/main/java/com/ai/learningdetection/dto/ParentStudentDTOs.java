@@ -81,6 +81,7 @@ public class ParentStudentDTOs {
         private String studentName;
         private String studentClassName;
         private String studentRollNumber;
+        private String teacherName;
         private String verificationStatus;
         private String connectedAt;
         private boolean isPrimary;
