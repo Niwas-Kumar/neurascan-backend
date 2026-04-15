@@ -8,6 +8,7 @@ import com.google.firebase.cloud.FirestoreClient;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import lombok.extern.slf4j.Slf4j;
 
 import jakarta.annotation.PostConstruct;
 import java.io.ByteArrayInputStream;
@@ -17,6 +18,7 @@ import java.io.InputStream;
 import java.util.Base64;
 
 @Configuration
+@Slf4j
 public class FirebaseConfig {
 
     @Value("${firebase.config-path:serviceAccountKey.json}")
@@ -31,7 +33,7 @@ public class FirebaseConfig {
 
         // Priority 1: Environment variable (for production/cloud deployment)
         if (firebaseServiceAccountBase64 != null && !firebaseServiceAccountBase64.isEmpty()) {
-            System.out.println("DEBUG: Loading Firebase credentials from FIREBASE_SERVICE_ACCOUNT_BASE64 env var");
+            log.info("Loading Firebase credentials from FIREBASE_SERVICE_ACCOUNT_BASE64 env var");
             String cleanBase64 = firebaseServiceAccountBase64.trim().replaceAll("\\s+", "");
             byte[] decoded = Base64.getDecoder().decode(cleanBase64);
             serviceAccountStream = new ByteArrayInputStream(decoded);
@@ -48,7 +50,7 @@ public class FirebaseConfig {
                     "\n  (On Windows PowerShell: [Convert]::ToBase64String([IO.File]::ReadAllBytes('serviceAccountKey.json')))\n\n"
                 );
             }
-            System.out.println("DEBUG: Loading Firebase credentials from file: " + file.getAbsolutePath());
+            log.info("Loading Firebase credentials from file: {}", file.getAbsolutePath());
             serviceAccountStream = new FileInputStream(file);
         }
 
@@ -59,15 +61,15 @@ public class FirebaseConfig {
 
         if (FirebaseApp.getApps().isEmpty()) {
             FirebaseApp.initializeApp(options);
-            System.out.println("DEBUG: FirebaseApp initialized with project ID: " + FirebaseApp.getInstance().getOptions().getProjectId());
+            log.info("FirebaseApp initialized with project ID: {}", FirebaseApp.getInstance().getOptions().getProjectId());
         }
 
         // Verify Firestore connectivity
         try {
             FirestoreClient.getFirestore().listCollections().iterator().hasNext();
-            System.out.println("DEBUG: [SUCCESS] Firestore connectivity verified.");
+            log.info("Firestore connectivity verified successfully");
         } catch (Exception e) {
-            System.err.println("DEBUG: [FAILURE] Firestore startup check failed: " + e.getMessage());
+            log.error("Firestore startup check failed: {}", e.getMessage(), e);
         }
     }
 

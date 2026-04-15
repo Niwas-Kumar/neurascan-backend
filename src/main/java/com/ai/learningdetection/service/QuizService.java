@@ -342,7 +342,7 @@ public class QuizService {
                     .whereEqualTo("studentId", studentId)
                     .get().get();
             
-            System.out.println("[QUIZ_SUCCESS] Fetched " + responses.size() + " quiz responses for student: " + studentId);
+            log.info("Fetched {} quiz responses for student: {}", responses.size(), studentId);
             return responses.getDocuments().stream().map(d -> d.toObject(QuizResponse.class)).collect(Collectors.toList());
 
         } catch (InterruptedException | ExecutionException e) {

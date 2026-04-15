@@ -3,6 +3,7 @@ package com.ai.learningdetection.config;
 import com.ai.learningdetection.security.AppUserDetailsService;
 import com.ai.learningdetection.security.JwtAuthenticationEntryPoint;
 import com.ai.learningdetection.security.JwtAuthenticationFilter;
+import com.ai.learningdetection.security.RateLimitingFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -30,6 +31,7 @@ public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
     private final AppUserDetailsService userDetailsService;
+    private final RateLimitingFilter rateLimitingFilter;
 
     @org.springframework.beans.factory.annotation.Value("${app.cors.allowed-origins}")
     private String corsAllowedOrigins;
@@ -87,6 +89,7 @@ public class SecurityConfig {
                 .anyRequest().authenticated()
             )
             .authenticationProvider(authenticationProvider())
+            .addFilterBefore(rateLimitingFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
@@ -99,7 +102,7 @@ public class SecurityConfig {
                 new org.springframework.web.cors.CorsConfiguration();
         configuration.setAllowedOrigins(java.util.Arrays.asList(corsAllowedOrigins.split(",")));
         configuration.setAllowedMethods(java.util.List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
-        configuration.setAllowedHeaders(java.util.List.of("*"));
+        configuration.setAllowedHeaders(java.util.List.of("Authorization", "Content-Type", "Accept", "X-Requested-With", "Origin"));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);
         // Expose X-New-Token header for automatic token refresh

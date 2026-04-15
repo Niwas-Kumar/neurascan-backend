@@ -8,6 +8,7 @@ import com.ai.learningdetection.service.QuizService;
 import com.ai.learningdetection.service.QuizAttemptService;
 import com.ai.learningdetection.service.QuizDistributionService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -15,12 +16,14 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import jakarta.validation.Valid;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 
 @RestController
 @RequestMapping({"/api/quizzes", "/quizzes"})
 @RequiredArgsConstructor
+@Slf4j
 public class QuizController {
 
     private final QuizService quizService;
@@ -34,7 +37,7 @@ public class QuizController {
     @PostMapping
     @PreAuthorize("hasRole('TEACHER')")
     public ResponseEntity<ApiResponse<QuizDTOs.QuizDetail>> createQuiz(
-            @RequestBody QuizDTOs.QuizGenerationRequest request,
+            @Valid @RequestBody QuizDTOs.QuizGenerationRequest request,
             @AuthenticationPrincipal IdentifiablePrincipal principal) {
 
         QuizDTOs.QuizDetail result = quizService.createQuiz(principal.getId(), request);
@@ -64,7 +67,7 @@ public class QuizController {
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<QuizResponse>> submitQuiz(
             @PathVariable String quizId,
-            @RequestBody QuizDTOs.QuizSubmissionRequest submissionRequest,
+            @Valid @RequestBody QuizDTOs.QuizSubmissionRequest submissionRequest,
             @AuthenticationPrincipal IdentifiablePrincipal principal) {
 
         submissionRequest.setQuizId(quizId);
@@ -118,7 +121,7 @@ public class QuizController {
     @PreAuthorize("hasRole('TEACHER')")
     public ResponseEntity<ApiResponse<List<QuizDTOs.QuizLinkResponse>>> distributeQuiz(
             @PathVariable String quizId,
-            @RequestBody QuizDTOs.QuizDistributionRequest request,
+            @Valid @RequestBody QuizDTOs.QuizDistributionRequest request,
             @AuthenticationPrincipal IdentifiablePrincipal principal) {
 
         try {
@@ -145,8 +148,9 @@ public class QuizController {
             return ResponseEntity.ok(ApiResponse.success(links, "Quiz distributed successfully"));
 
         } catch (Exception e) {
+            log.error("Failed to distribute quiz {}: {}", quizId, e.getMessage(), e);
             return ResponseEntity.badRequest()
-                    .body(ApiResponse.error("Failed to distribute quiz: " + e.getMessage()));
+                    .body(ApiResponse.error("Failed to distribute quiz. Please try again."));
         }
     }
 
@@ -164,7 +168,7 @@ public class QuizController {
     @PostMapping("/{quizId}/attempt")
     public ResponseEntity<ApiResponse<QuizDTOs.QuizAttemptDetail>> startQuizAttempt(
             @PathVariable String quizId,
-            @RequestBody QuizDTOs.QuizAttemptStartRequest request) {
+            @Valid @RequestBody QuizDTOs.QuizAttemptStartRequest request) {
 
         try {
             // Extract recipient info from token validation
@@ -175,8 +179,9 @@ public class QuizController {
             return ResponseEntity.ok(ApiResponse.success(attempt, "Quiz attempt started"));
 
         } catch (Exception e) {
+            log.error("Failed to start quiz attempt for quiz {}: {}", quizId, e.getMessage(), e);
             return ResponseEntity.badRequest()
-                    .body(ApiResponse.error("Failed to start quiz attempt: " + e.getMessage()));
+                    .body(ApiResponse.error("Failed to start quiz attempt. Please try again."));
         }
     }
 
@@ -196,7 +201,7 @@ public class QuizController {
     @PostMapping("/attempts/{quizAttemptId}/response")
     public ResponseEntity<ApiResponse<QuizDTOs.QuestionResponseDetail>> submitQuestionResponse(
             @PathVariable String quizAttemptId,
-            @RequestBody QuizDTOs.QuestionResponseRequest request) {
+            @Valid @RequestBody QuizDTOs.QuestionResponseRequest request) {
 
         try {
             request.setQuizAttemptId(quizAttemptId);
@@ -206,8 +211,9 @@ public class QuizController {
             return ResponseEntity.ok(ApiResponse.success(response, "Response recorded"));
 
         } catch (Exception e) {
+            log.error("Failed to submit response for attempt {}: {}", quizAttemptId, e.getMessage(), e);
             return ResponseEntity.badRequest()
-                    .body(ApiResponse.error("Failed to submit response: " + e.getMessage()));
+                    .body(ApiResponse.error("Failed to submit response. Please try again."));
         }
     }
 
@@ -230,8 +236,9 @@ public class QuizController {
             return ResponseEntity.ok(ApiResponse.success(result, "Quiz completed"));
 
         } catch (Exception e) {
+            log.error("Failed to complete quiz attempt {}: {}", quizAttemptId, e.getMessage(), e);
             return ResponseEntity.badRequest()
-                    .body(ApiResponse.error("Failed to complete quiz: " + e.getMessage()));
+                    .body(ApiResponse.error("Failed to complete quiz. Please try again."));
         }
     }
 
@@ -254,8 +261,9 @@ public class QuizController {
             return ResponseEntity.ok(ApiResponse.success(attempt, "Attempt details retrieved"));
 
         } catch (Exception e) {
+            log.error("Failed to fetch attempt details {}: {}", quizAttemptId, e.getMessage(), e);
             return ResponseEntity.badRequest()
-                    .body(ApiResponse.error("Failed to fetch attempt details: " + e.getMessage()));
+                    .body(ApiResponse.error("Failed to fetch attempt details. Please try again."));
         }
     }
 
@@ -275,8 +283,9 @@ public class QuizController {
             return ResponseEntity.ok(ApiResponse.success(progress, "Quiz progress retrieved"));
 
         } catch (Exception e) {
+            log.error("Failed to fetch quiz progress for {}: {}", quizId, e.getMessage(), e);
             return ResponseEntity.badRequest()
-                    .body(ApiResponse.error("Failed to fetch quiz progress: " + e.getMessage()));
+                    .body(ApiResponse.error("Failed to fetch quiz progress. Please try again."));
         }
     }
 
@@ -302,8 +311,9 @@ public class QuizController {
             return ResponseEntity.ok(ApiResponse.success(attempts, "Student quiz attempts retrieved"));
 
         } catch (Exception e) {
+            log.error("Failed to fetch student {} attempts: {}", studentId, e.getMessage(), e);
             return ResponseEntity.badRequest()
-                    .body(ApiResponse.error("Failed to fetch student attempts: " + e.getMessage()));
+                    .body(ApiResponse.error("Failed to fetch student attempts. Please try again."));
         }
     }
 
@@ -330,8 +340,9 @@ public class QuizController {
             return ResponseEntity.ok(ApiResponse.success(attempts, "All student quiz attempts retrieved"));
 
         } catch (Exception e) {
+            log.error("Failed to fetch all attempts for student {}: {}", studentId, e.getMessage(), e);
             return ResponseEntity.badRequest()
-                    .body(ApiResponse.error("Failed to fetch student attempts: " + e.getMessage()));
+                    .body(ApiResponse.error("Failed to fetch student attempts. Please try again."));
         }
     }
 

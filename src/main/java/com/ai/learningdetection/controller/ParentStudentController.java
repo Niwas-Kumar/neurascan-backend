@@ -13,6 +13,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
 
 /**
  * REST Controller for parent-student connection management.
@@ -69,7 +70,7 @@ public class ParentStudentController {
      */
     @PostMapping("/connect")
     public ResponseEntity<ApiResponse<ConnectionInitiatedResponse>> connectStudent(
-            @RequestBody ConnectStudentRequest request,
+            @Valid @RequestBody ConnectStudentRequest request,
             Authentication auth,
             HttpServletRequest httpRequest
     ) {
@@ -107,7 +108,7 @@ public class ParentStudentController {
      */
     @PostMapping("/verify")
     public ResponseEntity<ApiResponse<ConnectionResultResponse>> verifyConnection(
-            @RequestBody VerifyConnectionRequest request,
+            @Valid @RequestBody VerifyConnectionRequest request,
             Authentication auth
     ) {
         Object principal = auth.getPrincipal();

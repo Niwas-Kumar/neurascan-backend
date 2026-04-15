@@ -2,6 +2,7 @@ package com.ai.learningdetection.dto;
 
 import lombok.*;
 
+import jakarta.validation.constraints.*;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -57,9 +58,13 @@ public class QuizDTOs {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class QuizGenerationRequest {
+        @NotBlank(message = "Topic is required")
         private String topic;
         private String text;
+        @Min(value = 1, message = "Question count must be at least 1")
+        @Max(value = 50, message = "Question count must be at most 50")
         private int questionCount;
+        @NotBlank(message = "Class ID is required")
         private String classId;
     }
 
@@ -69,8 +74,11 @@ public class QuizDTOs {
     @AllArgsConstructor
     public static class QuizSubmissionRequest {
         private String quizId;
+        @NotBlank(message = "Student ID is required")
         private String studentId;
+        @NotBlank(message = "Class ID is required")
         private String classId;
+        @NotEmpty(message = "Answers cannot be empty")
         private Map<String, String> answers;
     }
 
@@ -84,6 +92,7 @@ public class QuizDTOs {
     @AllArgsConstructor
     public static class QuizAttemptStartRequest {
         private String quizId;
+        @NotBlank(message = "Token is required")
         private String token;           // Unique token from quiz link
     }
 
@@ -117,8 +126,11 @@ public class QuizDTOs {
     @AllArgsConstructor
     public static class QuestionResponseRequest {
         private String quizAttemptId;
+        @NotBlank(message = "Question ID is required")
         private String questionId;
+        @NotBlank(message = "Student answer is required")
         private String studentAnswer;
+        @Min(value = 0, message = "Response time cannot be negative")
         private long responseTimeMs;    // Time spent on this question
     }
 

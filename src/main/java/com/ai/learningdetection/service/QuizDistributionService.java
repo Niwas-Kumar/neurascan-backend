@@ -66,31 +66,52 @@ public class QuizDistributionService {
             List<QuizDTOs.QuizLinkResponse> links = new ArrayList<>();
             List<String> sentEmails = new ArrayList<>();
 
-            // Create links for each student
+            // OPTIMIZED: Batch fetch all students at once instead of N+1
+            List<DocumentReference> studentRefs = studentIds.stream()
+                    .map(id -> firestore.collection(STUDENTS_COLLECTION).document(id))
+                    .collect(Collectors.toList());
+            List<DocumentSnapshot> studentSnaps = firestore.getAll(studentRefs.toArray(new DocumentReference[0])).get();
+            
+            // Collect parent UIDs for batch fetch
+            Map<String, Student> studentMap = new HashMap<>();
+            Set<String> parentUids = new HashSet<>();
+            for (DocumentSnapshot snap : studentSnaps) {
+                if (!snap.exists()) continue;
+                Student student = snap.toObject(Student.class);
+                studentMap.put(snap.getId(), student);
+                if (student.getParentUid() != null && !student.getParentUid().isEmpty()) {
+                    parentUids.add(student.getParentUid());
+                }
+            }
+
+            // Batch fetch all parents at once
+            Map<String, String> parentEmailMap = new HashMap<>();
+            if (!parentUids.isEmpty()) {
+                List<DocumentReference> parentRefs = parentUids.stream()
+                        .map(uid -> firestore.collection("parents").document(uid))
+                        .collect(Collectors.toList());
+                List<DocumentSnapshot> parentSnaps = firestore.getAll(parentRefs.toArray(new DocumentReference[0])).get();
+                for (DocumentSnapshot pSnap : parentSnaps) {
+                    if (pSnap.exists()) {
+                        parentEmailMap.put(pSnap.getId(), pSnap.getString("email"));
+                    }
+                }
+            }
+
+            // Now iterate with pre-fetched data (no more N+1)
             for (String studentId : studentIds) {
                 try {
-                    DocumentSnapshot studentSnap = firestore.collection(STUDENTS_COLLECTION)
-                            .document(studentId).get().get();
-
-                    if (!studentSnap.exists()) {
-                        log.warn("⚠️ Student not found: {}", studentId);
+                    Student student = studentMap.get(studentId);
+                    if (student == null) {
+                        log.warn("Student not found: {}", studentId);
                         continue;
                     }
 
-                    Student student = studentSnap.toObject(Student.class);
-
-                    // Get parent email from parent entity using parentUid
-                    String parentEmail = null;
-                    if (student.getParentUid() != null && !student.getParentUid().isEmpty()) {
-                        DocumentSnapshot parentSnap = firestore.collection("parents")
-                                .document(student.getParentUid()).get().get();
-                        if (parentSnap.exists()) {
-                            parentEmail = parentSnap.getString("email");
-                        }
-                    }
+                    String parentEmail = student.getParentUid() != null 
+                            ? parentEmailMap.get(student.getParentUid()) : null;
 
                     if (parentEmail == null || parentEmail.isEmpty()) {
-                        log.warn("⚠️ No parent email found for student: {}", studentId);
+                        log.warn("No parent email found for student: {}", studentId);
                         continue;
                     }
 
@@ -108,10 +129,10 @@ public class QuizDistributionService {
                     links.add(linkResponse);
                     sentEmails.add(parentEmail);
 
-                    log.info("📧 Quiz link sent for student: {} to parent: {}", student.getName(), parentEmail);
+                    log.info("Quiz link sent for student: {} to parent: {}", student.getName(), parentEmail);
                     
                 } catch (Exception e) {
-                    log.error("❌ Error sending quiz to student {}: {}", studentId, e.getMessage());
+                    log.error("Error sending quiz to student {}: {}", studentId, e.getMessage());
                 }
             }
             
@@ -269,16 +290,7 @@ public class QuizDistributionService {
             if (sent) {
                 log.info("📧 Quiz invitation email sent to: {}", recipientEmail);
             } else {
-                log.warn("⚠️ Quiz invitation email NOT sent to: {} (check SendGrid config)", recipientEmail);
-                // Still log to console for debugging
-                System.out.println("\n" +
-                        "╔════════════════════════════════════════════════════════════╗\n" +
-                        "║ 📧 QUIZ INVITATION (Email service failed - showing link)   ║\n" +
-                        "╠════════════════════════════════════════════════════════════╣\n" +
-                        "║ To: " + recipientEmail + "\n" +
-                        "║ Topic: " + quizTopic + "\n" +
-                        "║ Link: " + attemptUrl + "\n" +
-                        "╚════════════════════════════════════════════════════════════╝\n");
+                log.warn("Quiz invitation email NOT sent to: {} (check SendGrid config). Quiz link: {}", recipientEmail, attemptUrl);
             }
 
         } catch (Exception e) {
