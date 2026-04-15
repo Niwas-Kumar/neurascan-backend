@@ -38,7 +38,7 @@ public class QuizDistributionService {
     private static final String STUDENTS_COLLECTION = "students";
     private static final String TEACHERS_COLLECTION = "teachers";
     private static final int TOKEN_LENGTH = 32;
-    private static final int DAYS_UNTIL_EXPIRY = 30;
+    private static final int DEFAULT_DAYS_UNTIL_EXPIRY = 7;
 
     /**
      * Distribute quiz to students by sending them unique attempt links.
@@ -47,7 +47,8 @@ public class QuizDistributionService {
             String quizId,
             List<String> studentIds,
             String teacherId,
-            String customMessage) throws ExecutionException, InterruptedException {
+            String customMessage,
+            int validityDays) throws ExecutionException, InterruptedException {
         
         try {
             // Verify quiz belongs to teacher
@@ -124,7 +125,8 @@ public class QuizDistributionService {
                             quiz.getTopic(),
                             customMessage,
                             teacherId,
-                            quiz.getClassId());
+                            quiz.getClassId(),
+                            validityDays);
 
                     links.add(linkResponse);
                     sentEmails.add(parentEmail);
@@ -155,7 +157,8 @@ public class QuizDistributionService {
             String quizId,
             List<String> parentEmails,
             String teacherId,
-            String customMessage) throws ExecutionException, InterruptedException {
+            String customMessage,
+            int validityDays) throws ExecutionException, InterruptedException {
         
         try {
             // Verify quiz belongs to teacher
@@ -184,7 +187,8 @@ public class QuizDistributionService {
                             quiz.getTopic(),
                             customMessage,
                             teacherId,
-                            quiz.getClassId());
+                            quiz.getClassId(),
+                            validityDays);
                     
                     links.add(linkResponse);
                     log.info("📧 Quiz link sent to parent: {}", parentEmail);
@@ -214,14 +218,15 @@ public class QuizDistributionService {
             String quizTopic,
             String customMessage,
             String teacherId,
-            String classId) throws ExecutionException, InterruptedException {
+            String classId,
+            int validityDays) throws ExecutionException, InterruptedException {
         
         // Generate secure token
         String token = generateSecureToken();
         
-        // Calculate expiry date
+        // Calculate expiry date using teacher-specified validity
         Calendar calendar = Calendar.getInstance();
-        calendar.add(Calendar.DAY_OF_MONTH, DAYS_UNTIL_EXPIRY);
+        calendar.add(Calendar.DAY_OF_MONTH, validityDays);
         Date expiryDate = calendar.getTime();
         
         // Create QuizLink entity

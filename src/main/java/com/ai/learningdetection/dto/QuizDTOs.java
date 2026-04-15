@@ -159,6 +159,7 @@ public class QuizDTOs {
         private List<String> studentIds;   // List of students to send to
         private List<String> parentEmails; // List of parent emails to send to
         private String customMessage;      // Optional custom message in email
+        private Integer validityDays;      // Link validity in days (default 7)
     }
 
     @Data
@@ -230,6 +231,8 @@ public class QuizDTOs {
         private String studentId;
         private boolean valid;
         private String message;
+        private boolean alreadyAttempted;
+        private Double completedScore;
     }
 
     @Data

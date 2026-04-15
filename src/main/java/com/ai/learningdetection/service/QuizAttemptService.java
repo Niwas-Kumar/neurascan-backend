@@ -59,7 +59,32 @@ public class QuizAttemptService {
             
             // Verify quiz link is valid
             validateQuizLink(quizId, token);
-            
+
+            // ── Single-attempt enforcement ──
+            // Check if a completed attempt already exists for this quiz + token
+            QuerySnapshot existingAttempts = firestore.collection(QUIZ_ATTEMPTS_COLLECTION)
+                    .whereEqualTo("quizId", quizId)
+                    .whereEqualTo("attemptToken", token)
+                    .whereEqualTo("isCompleted", true)
+                    .limit(1)
+                    .get().get();
+            if (!existingAttempts.isEmpty()) {
+                throw new IllegalStateException("This quiz has already been completed. Only one attempt is allowed.");
+            }
+
+            // Also check for in-progress attempts — resume instead of creating a new one
+            QuerySnapshot inProgressAttempts = firestore.collection(QUIZ_ATTEMPTS_COLLECTION)
+                    .whereEqualTo("quizId", quizId)
+                    .whereEqualTo("attemptToken", token)
+                    .whereEqualTo("isCompleted", false)
+                    .limit(1)
+                    .get().get();
+            if (!inProgressAttempts.isEmpty()) {
+                QuizAttempt existing = inProgressAttempts.getDocuments().get(0).toObject(QuizAttempt.class);
+                log.info("🔄 Resuming existing attempt: {} for quiz: {}", existing.getId(), quizId);
+                return convertToAttemptDetail(existing);
+            }
+
             // Create new quiz attempt
             DocumentReference attemptRef = firestore.collection(QUIZ_ATTEMPTS_COLLECTION).document();
             

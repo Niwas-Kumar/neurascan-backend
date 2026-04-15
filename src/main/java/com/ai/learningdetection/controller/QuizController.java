@@ -127,13 +127,19 @@ public class QuizController {
         try {
             List<QuizDTOs.QuizLinkResponse> links = new java.util.ArrayList<>();
 
+            // Resolve validity days (default 7, clamp 1-30)
+            int validityDays = request.getValidityDays() != null
+                    ? Math.max(1, Math.min(30, request.getValidityDays()))
+                    : 7;
+
             // Send to students if provided
             if (request.getStudentIds() != null && !request.getStudentIds().isEmpty()) {
                 links.addAll(quizDistributionService.distributeQuizToStudents(
                         quizId,
                         request.getStudentIds(),
                         principal.getId(),
-                        request.getCustomMessage()));
+                        request.getCustomMessage(),
+                        validityDays));
             }
 
             // Send to parents if provided
@@ -142,7 +148,8 @@ public class QuizController {
                         quizId,
                         request.getParentEmails(),
                         principal.getId(),
-                        request.getCustomMessage()));
+                        request.getCustomMessage(),
+                        validityDays));
             }
 
             return ResponseEntity.ok(ApiResponse.success(links, "Quiz distributed successfully"));

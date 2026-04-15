@@ -72,6 +72,27 @@ public class PublicQuizController {
                         .body(ApiResponse.error("This quiz link has expired. Please request a new link from your teacher."));
             }
 
+            // Check if already attempted (single-attempt enforcement)
+            if (link.getQuizAttemptId() != null && !link.getQuizAttemptId().isBlank()) {
+                DocumentSnapshot existingAttempt = firestore.collection("quiz_attempts")
+                        .document(link.getQuizAttemptId()).get().get();
+                if (existingAttempt.exists()) {
+                    Boolean isCompleted = existingAttempt.getBoolean("isCompleted");
+                    if (Boolean.TRUE.equals(isCompleted)) {
+                        Double score = existingAttempt.getDouble("score");
+                        log.info("⚠️ Quiz already attempted by: {}", link.getRecipientEmail());
+                        QuizDTOs.QuizAttemptStartResponse alreadyDone = QuizDTOs.QuizAttemptStartResponse.builder()
+                                .quizId(quizId)
+                                .valid(false)
+                                .alreadyAttempted(true)
+                                .completedScore(score)
+                                .message("You have already completed this quiz. Only one attempt is allowed.")
+                                .build();
+                        return ResponseEntity.ok(ApiResponse.success(alreadyDone, "Quiz already attempted"));
+                    }
+                }
+            }
+
             // Get quiz details
             DocumentSnapshot quizSnap = firestore.collection(QUIZZES_COLLECTION)
                     .document(quizId).get().get();
