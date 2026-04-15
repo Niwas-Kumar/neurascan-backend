@@ -1,5 +1,6 @@
 package com.ai.learningdetection.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.*;
 import java.util.List;
 
@@ -84,6 +85,7 @@ public class ParentStudentDTOs {
         private String teacherName;
         private String verificationStatus;
         private String connectedAt;
+        @JsonProperty("isPrimary")
         private boolean isPrimary;
         private boolean canAccessData;
     }

@@ -378,7 +378,7 @@ public class ParentStudentService {
             QuerySnapshot query = firestore.collection(RELATIONSHIPS_COLLECTION)
                     .whereEqualTo("parentId", parentId)
                     .whereEqualTo("verificationStatus", "VERIFIED")
-                    .whereEqualTo("isPrimary", true)
+                    .whereEqualTo("primary", true)
                     .limit(1)
                     .get().get();
 
@@ -501,7 +501,7 @@ public class ParentStudentService {
                 }
 
                 if (rel.isPrimary() != shouldBePrimary) {
-                    batch.update(doc.getReference(), "isPrimary", shouldBePrimary);
+                    batch.update(doc.getReference(), "primary", shouldBePrimary);
                 }
             }
 
@@ -638,13 +638,12 @@ public class ParentStudentService {
             QuerySnapshot query = firestore.collection(RELATIONSHIPS_COLLECTION)
                     .whereEqualTo("parentId", parentId)
                     .whereEqualTo("verificationStatus", "VERIFIED")
-                    .limit(1)
                     .get().get();
 
             for (DocumentSnapshot doc : query.getDocuments()) {
                 ParentStudentRelationship rel = doc.toObject(ParentStudentRelationship.class);
                 if (rel.getDisconnectedAt() == null) {
-                    doc.getReference().update("isPrimary", true).get();
+                    doc.getReference().update("primary", true).get();
                     log.info("Promoted student {} as new primary for parent {}",
                             rel.getStudentId(), parentId);
                     break;
