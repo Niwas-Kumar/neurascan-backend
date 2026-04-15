@@ -17,6 +17,9 @@ public class QuizDTOs {
         private String question;
         private List<String> options;
         private String answer;
+        private String category;
+        private String screeningTarget;
+        private String difficulty;
     }
 
     @Data

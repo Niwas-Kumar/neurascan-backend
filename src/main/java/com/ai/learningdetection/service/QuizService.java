@@ -50,6 +50,9 @@ public class QuizService {
                             .question((String) q.getOrDefault("question", ""))
                             .options((List<String>) q.getOrDefault("options", new ArrayList<>()))
                             .answer((String) q.getOrDefault("answer", ""))
+                            .category((String) q.getOrDefault("category", ""))
+                            .screeningTarget((String) q.getOrDefault("screeningTarget", ""))
+                            .difficulty((String) q.getOrDefault("difficulty", "medium"))
                             .build());
                 }
             }
@@ -76,6 +79,9 @@ public class QuizService {
                             .question(q.getQuestion())
                             .options(q.getOptions())
                             .answer(q.getAnswer())
+                            .category(q.getCategory())
+                            .screeningTarget(q.getScreeningTarget())
+                            .difficulty(q.getDifficulty())
                             .build()).collect(Collectors.toList()))
                     .build();
 
@@ -85,50 +91,151 @@ public class QuizService {
     }
 
     private List<Quiz.QuizQuestion> buildFallbackQuestions(String topic, String text, int questionCount) {
-        List<Quiz.QuizQuestion> questions = new ArrayList<>();
-        if (text == null || text.isBlank()) {
-            // Default question set
-            for (int i = 1; i <= questionCount; i++) {
-                questions.add(Quiz.QuizQuestion.builder()
-                        .id(UUID.randomUUID().toString())
-                        .question("What is the main goal of this lesson?")
-                        .options(List.of("Understanding","Memorizing","Foundational","Optional"))
-                        .answer("Understanding")
-                        .build());
-            }
-            return questions;
-        }
+        // Screening question bank for dyslexia/dysgraphia detection
+        List<Quiz.QuizQuestion> bank = buildScreeningQuestionBank();
+        Collections.shuffle(bank);
+        return bank.stream().limit(questionCount).collect(Collectors.toList());
+    }
 
-        String[] sentences = text.split("[\\.\\?\\!]\\s*");
-        for (int i = 0; i < Math.min(questionCount, sentences.length); i++) {
-            String sentence = sentences[i].trim();
-            if (sentence.isEmpty()) continue;
+    private List<Quiz.QuizQuestion> buildScreeningQuestionBank() {
+        List<Quiz.QuizQuestion> bank = new ArrayList<>();
 
-            String[] words = sentence.split("\\s+");
-            if (words.length < 4) continue;
+        // ── Letter Discrimination (Dyslexia — reversal detection) ──
+        bank.add(screeningQ("Which word is spelled correctly?",
+                List.of("dog", "bog", "dob", "gob"), "dog",
+                "letter_discrimination", "b/d reversal awareness", "easy"));
+        bank.add(screeningQ("Select the correct spelling of the word that means 'a round object used in games':",
+                List.of("ball", "dall", "boll", "pall"), "ball",
+                "letter_discrimination", "b/d/p reversal awareness", "easy"));
+        bank.add(screeningQ("Which of these is a real word?",
+                List.of("bed", "ded", "beb", "deb"), "bed",
+                "letter_discrimination", "b/d discrimination", "easy"));
+        bank.add(screeningQ("Choose the word that means 'the opposite of good':",
+                List.of("bad", "dad", "pad", "dab"), "bad",
+                "letter_discrimination", "b/d/p reversal detection", "easy"));
+        bank.add(screeningQ("Which spelling is correct for a place where you sleep?",
+                List.of("bedroom", "dedroom", "bedloom", "pedroom"), "bedroom",
+                "letter_discrimination", "b/d reversal in longer words", "medium"));
+        bank.add(screeningQ("Identify the correctly spelled word meaning 'a young dog':",
+                List.of("puppy", "buppy", "dubby", "puffy"), "puppy",
+                "letter_discrimination", "p/b discrimination", "medium"));
 
-            int missingIndex = Math.min(1, words.length - 1);
-            String correct = words[missingIndex];
-            String questionText = sentence.replaceFirst(correct, "____");
+        // ── Phoneme Awareness (Dyslexia — sound processing) ──
+        bank.add(screeningQ("Which word rhymes with 'cat'?",
+                List.of("hat", "cup", "dog", "run"), "hat",
+                "phoneme_awareness", "rhyme recognition", "easy"));
+        bank.add(screeningQ("Which word starts with the same sound as 'fish'?",
+                List.of("fun", "sun", "bun", "gum"), "fun",
+                "phoneme_awareness", "initial phoneme matching", "easy"));
+        bank.add(screeningQ("How many syllables are in the word 'butterfly'?",
+                List.of("3", "2", "4", "1"), "3",
+                "phoneme_awareness", "syllable segmentation", "medium"));
+        bank.add(screeningQ("Which word does NOT rhyme with 'make'?",
+                List.of("milk", "cake", "take", "lake"), "milk",
+                "phoneme_awareness", "rhyme discrimination", "medium"));
+        bank.add(screeningQ("If you remove the first sound from 'stop', what word do you get?",
+                List.of("top", "sop", "pop", "pot"), "top",
+                "phoneme_awareness", "phoneme deletion", "medium"));
+        bank.add(screeningQ("Blend these sounds together: /k/ /a/ /t/. What word does it make?",
+                List.of("cat", "cut", "kit", "coat"), "cat",
+                "phoneme_awareness", "phoneme blending", "easy"));
 
-            questions.add(Quiz.QuizQuestion.builder()
-                    .id(UUID.randomUUID().toString())
-                    .question(questionText)
-                    .options(List.of(correct, "optionA", "optionB", "optionC"))
-                    .answer(correct)
-                    .build());
-        }
+        // ── Spelling Patterns (Dyslexia — orthographic processing) ──
+        bank.add(screeningQ("Which is the correct spelling?",
+                List.of("because", "becuase", "becouse", "becasue"), "because",
+                "spelling_patterns", "common letter transposition", "medium"));
+        bank.add(screeningQ("Choose the correct spelling of the word meaning 'adequate':",
+                List.of("enough", "enugh", "enogh", "enouph"), "enough",
+                "spelling_patterns", "irregular spelling recognition", "medium"));
+        bank.add(screeningQ("Select the correctly spelled word:",
+                List.of("friend", "freind", "frend", "freand"), "friend",
+                "spelling_patterns", "ie/ei pattern confusion", "medium"));
+        bank.add(screeningQ("Which word is spelled correctly?",
+                List.of("said", "sed", "siad", "sayd"), "said",
+                "spelling_patterns", "sight word accuracy", "easy"));
+        bank.add(screeningQ("Choose the correct spelling for the word meaning 'not the same':",
+                List.of("different", "diffrent", "diferent", "differant"), "different",
+                "spelling_patterns", "syllable omission detection", "medium"));
+        bank.add(screeningQ("Choose the correct spelling for the word meaning 'very pretty':",
+                List.of("beautiful", "beatiful", "beutiful", "beautful"), "beautiful",
+                "spelling_patterns", "complex vowel sequence", "hard"));
 
-        if (questions.isEmpty()) {
-            questions.add(Quiz.QuizQuestion.builder()
-                    .id(UUID.randomUUID().toString())
-                    .question("What is the main topic of this material?")
-                    .options(List.of(topic, "General","Language","Math"))
-                    .answer(topic)
-                    .build());
-        }
+        // ── Visual-Spatial (Dysgraphia — spatial awareness) ──
+        bank.add(screeningQ("Which sequence continues the pattern: 1, 3, 5, 7, ___?",
+                List.of("9", "8", "10", "6"), "9",
+                "visual_spatial", "number pattern recognition", "easy"));
+        bank.add(screeningQ("Which group of letters is in correct alphabetical order?",
+                List.of("a, b, c, d", "a, c, b, d", "b, a, c, d", "a, b, d, c"), "a, b, c, d",
+                "visual_spatial", "alphabetical sequencing", "easy"));
+        bank.add(screeningQ("Which word has all its letters in the correct left-to-right order?",
+                List.of("draw", "darw", "dwar", "dwra"), "draw",
+                "visual_spatial", "letter ordering accuracy", "easy"));
+        bank.add(screeningQ("What comes next in the pattern: circle, square, circle, square, ___?",
+                List.of("circle", "triangle", "square", "star"), "circle",
+                "visual_spatial", "visual pattern continuation", "easy"));
+        bank.add(screeningQ("Put these steps in the correct order: 1) Write your answer 2) Read the question 3) Check your work",
+                List.of("2, 1, 3", "1, 2, 3", "3, 2, 1", "2, 3, 1"), "2, 1, 3",
+                "visual_spatial", "sequential task ordering", "medium"));
+        bank.add(screeningQ("Which number sequence is in the correct order?",
+                List.of("12, 13, 14, 15", "12, 14, 13, 15", "15, 14, 13, 12", "12, 31, 14, 51"), "12, 13, 14, 15",
+                "visual_spatial", "number reversal detection", "medium"));
 
-        return questions;
+        // ── Reading Comprehension (Both — processing + retention) ──
+        bank.add(screeningQ("'The cat sat on the mat.' What is the cat doing?",
+                List.of("Sitting", "Running", "Sleeping", "Eating"), "Sitting",
+                "reading_comprehension", "simple sentence comprehension", "easy"));
+        bank.add(screeningQ("'Before you eat, wash your hands.' What should you do first?",
+                List.of("Wash your hands", "Eat", "Sit down", "Set the table"), "Wash your hands",
+                "reading_comprehension", "temporal sequence understanding", "easy"));
+        bank.add(screeningQ("'The boy was sad because he lost his toy.' Why was the boy sad?",
+                List.of("He lost his toy", "He was tired", "He was hungry", "He was sick"), "He lost his toy",
+                "reading_comprehension", "cause-effect relationship", "easy"));
+        bank.add(screeningQ("Read: 'Tom has 3 apples. He gives 1 to Sam.' How many apples does Tom have now?",
+                List.of("2", "3", "1", "4"), "2",
+                "reading_comprehension", "comprehension with numbers", "easy"));
+        bank.add(screeningQ("'Even though it was raining, Sarah walked to school without an umbrella.' What can you conclude?",
+                List.of("She got wet", "She stayed dry", "She stayed home", "She drove to school"), "She got wet",
+                "reading_comprehension", "inferential comprehension", "medium"));
+        bank.add(screeningQ("Choose the best title: 'Bees make honey. They live in hives. Bees help flowers grow by carrying pollen.'",
+                List.of("All About Bees", "Flowers and Gardens", "Making Food", "Animals in the Wild"), "All About Bees",
+                "reading_comprehension", "main idea identification", "medium"));
+
+        // ── Writing Mechanics (Dysgraphia — grammar/punctuation) ──
+        bank.add(screeningQ("Which sentence uses correct capitalization?",
+                List.of("My name is John.", "my name is john.", "My Name Is John.", "my Name is John."), "My name is John.",
+                "writing_mechanics", "capitalization rules", "easy"));
+        bank.add(screeningQ("Which sentence has correct punctuation?",
+                List.of("Where are you going?", "Where are you going.", "where are you going?", "Where are you going"), "Where are you going?",
+                "writing_mechanics", "question mark usage", "easy"));
+        bank.add(screeningQ("Choose the sentence with proper spacing between words:",
+                List.of("The dog is big.", "Thedog is big.", "The dogis big.", "The dog isbig."), "The dog is big.",
+                "writing_mechanics", "word boundary awareness", "easy"));
+        bank.add(screeningQ("Which sentence is grammatically correct?",
+                List.of("She goes to school every day.", "She go to school every day.", "She going to school every day.", "She goed to school every day."), "She goes to school every day.",
+                "writing_mechanics", "subject-verb agreement", "medium"));
+        bank.add(screeningQ("Choose the correct plural form of 'child':",
+                List.of("children", "childs", "childrens", "childes"), "children",
+                "writing_mechanics", "irregular plural knowledge", "medium"));
+        bank.add(screeningQ("Which is the correct contraction of 'do not'?",
+                List.of("don't", "dont", "do'nt", "don,t"), "don't",
+                "writing_mechanics", "contraction formation", "easy"));
+
+        return bank;
+    }
+
+    private Quiz.QuizQuestion screeningQ(String question, List<String> options, String answer,
+                                          String category, String screeningTarget, String difficulty) {
+        List<String> shuffled = new ArrayList<>(options);
+        Collections.shuffle(shuffled);
+        return Quiz.QuizQuestion.builder()
+                .id(UUID.randomUUID().toString())
+                .question(question)
+                .options(shuffled)
+                .answer(answer)
+                .category(category)
+                .screeningTarget(screeningTarget)
+                .difficulty(difficulty)
+                .build();
     }
 
     public List<QuizDTOs.QuizDetail> getQuizzesByTeacher(String teacherId) {
@@ -150,6 +257,9 @@ public class QuizService {
                                 .question(qu.getQuestion())
                                 .options(qu.getOptions())
                                 .answer(qu.getAnswer())
+                                .category(qu.getCategory())
+                                .screeningTarget(qu.getScreeningTarget())
+                                .difficulty(qu.getDifficulty())
                                 .build()).collect(Collectors.toList()))
                         .build();
             }).collect(Collectors.toList());
@@ -181,6 +291,9 @@ public class QuizService {
                             .question(qu.getQuestion())
                             .options(qu.getOptions())
                             .answer(qu.getAnswer())
+                            .category(qu.getCategory())
+                            .screeningTarget(qu.getScreeningTarget())
+                            .difficulty(qu.getDifficulty())
                             .build()).collect(Collectors.toList()))
                     .build();
 
