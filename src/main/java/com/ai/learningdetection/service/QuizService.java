@@ -378,6 +378,19 @@ public class QuizService {
                 throw new UnauthorizedAccessException("Class mismatch for quiz submission");
             }
 
+            // ── Single-attempt enforcement: prevent duplicate submissions ──
+            if (request.getStudentId() != null && !request.getStudentId().isBlank()) {
+                var existingResponses = firestore.collection(QUIZ_RESPONSES_COLLECTION)
+                        .whereEqualTo("quizId", request.getQuizId())
+                        .whereEqualTo("studentId", request.getStudentId())
+                        .limit(1)
+                        .get().get();
+                if (!existingResponses.isEmpty()) {
+                    throw new IllegalStateException(
+                            "This student has already attempted this quiz. Only one attempt is allowed to maintain screening consistency.");
+                }
+            }
+
             int correct = 0;
             for (Quiz.QuizQuestion question : quiz.getQuestions()) {
                 String answer = request.getAnswers().getOrDefault(question.getId(), "");

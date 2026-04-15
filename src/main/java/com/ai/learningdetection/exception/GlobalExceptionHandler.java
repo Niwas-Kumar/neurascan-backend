@@ -153,6 +153,18 @@ public class GlobalExceptionHandler {
     }
 
     // -------------------------------------------------------
+    // Conflict / Duplicate — 409
+    // -------------------------------------------------------
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<ApiResponse<Void>> handleIllegalState(
+            IllegalStateException ex) {
+        log.warn("Illegal state: {}", ex.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(ApiResponse.error(ex.getMessage()));
+    }
+
+    // -------------------------------------------------------
     // General Fallback — 500
     // -------------------------------------------------------
     @ExceptionHandler(Exception.class)
