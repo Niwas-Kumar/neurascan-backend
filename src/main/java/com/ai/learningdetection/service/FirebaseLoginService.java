@@ -113,7 +113,7 @@ public class FirebaseLoginService {
                 if ("REJECTED".equals(status)) {
                     throw new BadCredentialsException("Your teacher account has been rejected. Please contact support.");
                 }
-                AuthDTOs.AuthResponse resp = createResponse(t.getEmail(), "ROLE_TEACHER", t.getId(), t.getName(), t.getPicture());
+                AuthDTOs.AuthResponse resp = createResponse(t.getEmail(), "ROLE_TEACHER", t.getId(), t.getName(), t.getPicture(), t.getSchoolId());
                 if ("PENDING".equals(status)) {
                     resp.setMessage("ACCOUNT_PENDING_APPROVAL");
                 }
@@ -137,7 +137,7 @@ public class FirebaseLoginService {
                 }
                 long totalTime = System.currentTimeMillis() - loginStartTime;
                 log.info("Google Login: Parent login completed in {}ms", totalTime);
-                return createResponse(p.getEmail(), "ROLE_PARENT", p.getId(), p.getName(), p.getPicture());
+                return createResponse(p.getEmail(), "ROLE_PARENT", p.getId(), p.getName(), p.getPicture(), null);
             }
 
             // 2. Create new account
@@ -159,7 +159,7 @@ public class FirebaseLoginService {
                 upsertUserProfile(decodedToken.getUid(), email, name, "ROLE_PARENT", "");
                 long totalTime = System.currentTimeMillis() - loginStartTime;
                 log.info("Google Login: New parent created with ID: {} (total: {}ms)", p.getId(), totalTime);
-                return createResponse(p.getEmail(), "ROLE_PARENT", p.getId(), p.getName(), p.getPicture());
+                return createResponse(p.getEmail(), "ROLE_PARENT", p.getId(), p.getName(), p.getPicture(), null);
             } else {
                 DocumentReference docRef = firestore.collection(TEACHERS_COLLECTION).document();
                 Teacher t = Teacher.builder()
@@ -178,7 +178,7 @@ public class FirebaseLoginService {
                 upsertUserProfile(decodedToken.getUid(), email, name, "ROLE_TEACHER", t.getSchoolId());
                 long totalTime = System.currentTimeMillis() - loginStartTime;
                 log.info("Google Login: New teacher created with ID: {} (status: PENDING, total: {}ms)", t.getId(), totalTime);
-                AuthDTOs.AuthResponse response = createResponse(t.getEmail(), "ROLE_TEACHER", t.getId(), t.getName(), t.getPicture());
+                AuthDTOs.AuthResponse response = createResponse(t.getEmail(), "ROLE_TEACHER", t.getId(), t.getName(), t.getPicture(), t.getSchoolId());
                 response.setMessage("ACCOUNT_PENDING_APPROVAL");
                 return response;
             }
@@ -195,8 +195,8 @@ public class FirebaseLoginService {
         }
     }
 
-    private AuthDTOs.AuthResponse createResponse(String email, String role, String userId, String name, String picture) {
-        String token = jwtUtil.generateToken(email, role, userId, name, picture);
+    private AuthDTOs.AuthResponse createResponse(String email, String role, String userId, String name, String picture, String schoolId) {
+        String token = jwtUtil.generateToken(email, role, userId, name, picture, schoolId);
         return AuthDTOs.AuthResponse.builder()
                 .jwtToken(token)
                 .userRole(role)
@@ -204,6 +204,7 @@ public class FirebaseLoginService {
                 .userName(name)
                 .userEmail(email)
                 .picture(picture)
+                .schoolId(schoolId)
                 .message("Login successful via Google")
                 .build();
     }

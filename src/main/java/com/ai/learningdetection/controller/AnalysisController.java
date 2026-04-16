@@ -80,6 +80,23 @@ public class AnalysisController {
                 ApiResponse.success(dashboard, "Dashboard data retrieved successfully"));
     }
 
+    /**
+     * GET /api/analysis/student-progress/{studentId}
+     * Teacher retrieves a student's analysis history (timeline).
+     */
+    @GetMapping("/student-progress/{studentId}")
+    @PreAuthorize("hasRole('TEACHER')")
+    public ResponseEntity<ApiResponse<AnalysisDTOs.ProgressResponse>> getStudentProgress(
+            @PathVariable String studentId,
+            @AuthenticationPrincipal IdentifiablePrincipal principal) {
+
+        AnalysisDTOs.ProgressResponse progress =
+                analysisService.getProgressForTeacher(studentId, principal.getId());
+
+        return ResponseEntity.ok(
+                ApiResponse.success(progress, "Student progress retrieved successfully"));
+    }
+
     // ============================================================
     // PARENT ENDPOINTS
     // ============================================================

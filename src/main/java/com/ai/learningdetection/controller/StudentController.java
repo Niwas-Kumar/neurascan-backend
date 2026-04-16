@@ -3,6 +3,7 @@ package com.ai.learningdetection.controller;
 import com.ai.learningdetection.dto.ApiResponse;
 import com.ai.learningdetection.dto.StudentDTOs;
 import com.ai.learningdetection.security.IdentifiablePrincipal;
+import com.ai.learningdetection.security.TeacherUserDetails;
 import com.ai.learningdetection.service.StudentService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -98,6 +99,33 @@ public class StudentController {
 
         studentService.deleteStudent(id, principal.getId());
         return ResponseEntity.ok(ApiResponse.success(null, "Student deleted successfully"));
+    }
+
+    /**
+     * GET /api/students/school
+     * Returns all students in the teacher's school (school-wide view).
+     */
+    @GetMapping("/school")
+    public ResponseEntity<ApiResponse<List<StudentDTOs.StudentResponse>>> getSchoolStudents(
+            @AuthenticationPrincipal IdentifiablePrincipal principal,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String className,
+            @RequestParam(required = false) String tag,
+            @RequestParam(required = false) String rollNumber) {
+
+        String schoolId = null;
+        if (principal instanceof TeacherUserDetails teacherDetails) {
+            schoolId = teacherDetails.getSchoolId();
+        }
+        if (schoolId == null || schoolId.isBlank()) {
+            return ResponseEntity.ok(
+                    ApiResponse.success(List.of(), "No school assigned to this teacher"));
+        }
+
+        List<StudentDTOs.StudentResponse> students =
+                studentService.getStudentsBySchool(schoolId, search, className, tag, rollNumber);
+        return ResponseEntity.ok(
+                ApiResponse.success(students, "School students retrieved successfully"));
     }
 
 }

@@ -116,12 +116,16 @@ public class AdminController {
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getStats() {
         long pendingCount = adminService.getPendingTeacherCount();
+        long totalTeachers = adminService.getTotalTeacherCount();
+        long totalStudents = adminService.getTotalStudentCount();
         List<School> schools = schoolService.getAllSchools();
-        return ResponseEntity.ok(ApiResponse.success(Map.of(
-                "pendingTeachers", pendingCount,
-                "totalSchools", schools.size(),
-                "activeSchools", schools.stream().filter(School::isActive).count()
-        )));
+        Map<String, Object> stats = new java.util.HashMap<>();
+        stats.put("pendingTeachers", pendingCount);
+        stats.put("totalTeachers", totalTeachers);
+        stats.put("totalStudents", totalStudents);
+        stats.put("totalSchools", schools.size());
+        stats.put("activeSchools", schools.stream().filter(School::isActive).count());
+        return ResponseEntity.ok(ApiResponse.success(stats));
     }
 
     // ── Public: Validate School Code (for registration) ───────

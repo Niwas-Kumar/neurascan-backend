@@ -11,6 +11,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
@@ -25,9 +26,11 @@ public class AdminService {
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
     private final EmailService emailService;
+    private final NotificationService notificationService;
 
     private static final String ADMINS_COLLECTION = "admins";
     private static final String TEACHERS_COLLECTION = "teachers";
+    private static final String STUDENTS_COLLECTION = "students";
 
     /**
      * Admin login.
@@ -119,6 +122,9 @@ public class AdminService {
             } catch (Exception e) {
                 log.warn("Failed to send approval email to {}: {}", teacher.getEmail(), e.getMessage());
             }
+
+            // In-app notification
+            notificationService.notifyTeacherApproved(teacherId, teacher.getName());
         } catch (InterruptedException | ExecutionException e) {
             throw new RuntimeException("Failed to approve teacher", e);
         }
@@ -165,6 +171,22 @@ public class AdminService {
             return query.size();
         } catch (InterruptedException | ExecutionException e) {
             throw new RuntimeException("Failed to count pending teachers", e);
+        }
+    }
+
+    public long getTotalTeacherCount() {
+        try {
+            return firestore.collection(TEACHERS_COLLECTION).get().get().size();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new RuntimeException("Failed to count teachers", e);
+        }
+    }
+
+    public long getTotalStudentCount() {
+        try {
+            return firestore.collection(STUDENTS_COLLECTION).get().get().size();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new RuntimeException("Failed to count students", e);
         }
     }
 

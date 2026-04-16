@@ -30,6 +30,7 @@ public class QuizAttemptService {
 
     private final Firestore firestore;
     private final AiIntegrationService aiIntegrationService;
+    private final NotificationService notificationService;
 
     private static final String QUIZ_ATTEMPTS_COLLECTION = "quiz_attempts";
     private static final String QUESTION_RESPONSES_COLLECTION = "question_responses";
@@ -286,7 +287,27 @@ public class QuizAttemptService {
             analyzeQuizAttempt(attempt);
             
             log.info("✅ Quiz completed: attempt={}, score={}", quizAttemptId, score);
-            
+
+            // Notify the quiz owner (teacher)
+            try {
+                DocumentSnapshot quizDoc = firestore.collection("quizzes").document(attempt.getQuizId()).get().get();
+                if (quizDoc.exists()) {
+                    String teacherId = quizDoc.getString("teacherId");
+                    String studentName = "A student";
+                    if (attempt.getStudentId() != null) {
+                        DocumentSnapshot studentDoc = firestore.collection("students").document(attempt.getStudentId()).get().get();
+                        if (studentDoc.exists() && studentDoc.getString("name") != null) {
+                            studentName = studentDoc.getString("name");
+                        }
+                    }
+                    if (teacherId != null) {
+                        notificationService.notifyQuizCompleted(teacherId, studentName, attempt.getQuizId(), score);
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("Failed to send quiz completion notification: {}", e.getMessage());
+            }
+
             return convertToAttemptDetail(attempt);
             
         } catch (ExecutionException | InterruptedException e) {

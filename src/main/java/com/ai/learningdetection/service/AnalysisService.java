@@ -33,6 +33,7 @@ public class AnalysisService {
     private final Firestore firestore;
     private final FileStorageService fileStorageService;
     private final AiIntegrationService aiIntegrationService;
+    private final NotificationService notificationService;
 
     private static final String STUDENTS_COLLECTION = "students";
     private static final String PAPERS_COLLECTION = "test_papers";
@@ -97,6 +98,23 @@ public class AnalysisService {
             reportRef.set(report).get();
 
             String riskLevel = RiskLevelUtil.calculateRiskLevel(report.getDyslexiaScore(), report.getDysgraphiaScore());
+
+            // Notify teacher
+            String studentName = studentSnap.getString("name");
+            notificationService.notifyAnalysisComplete(teacherId, studentName != null ? studentName : "Student", riskLevel, report.getId());
+
+            // Notify linked parents
+            try {
+                QuerySnapshot parentLinks = firestore.collection("parent_student_relationships")
+                        .whereEqualTo("studentId", studentId)
+                        .whereEqualTo("verificationStatus", "VERIFIED")
+                        .get().get();
+                for (DocumentSnapshot link : parentLinks.getDocuments()) {
+                    notificationService.notifyParentAnalysis(link.getString("parentId"), studentName != null ? studentName : "Your child", riskLevel);
+                }
+            } catch (Exception e) {
+                log.warn("Failed to notify parents for student {}: {}", studentId, e.getMessage());
+            }
 
             return AnalysisDTOs.UploadResponse.builder()
                     .message("File uploaded and analyzed successfully")
@@ -371,6 +389,52 @@ public class AnalysisService {
         } catch (InterruptedException | ExecutionException e) {
             log.error("Firestore error for dashboard of teacher: {}", teacherId, e);
             throw new RuntimeException("Firestore error for dashboard", e);
+        }
+    }
+
+    // ============================================================
+    // TEACHER: Student Progress Timeline
+    // ============================================================
+
+    public AnalysisDTOs.ProgressResponse getProgressForTeacher(String studentId, String teacherId) {
+        try {
+            // Verify student belongs to this teacher
+            DocumentSnapshot studentSnap = firestore.collection(STUDENTS_COLLECTION).document(studentId).get().get();
+            if (!studentSnap.exists() || !teacherId.equals(studentSnap.getString("teacherId"))) {
+                throw new UnauthorizedAccessException("Student does not belong to you.");
+            }
+
+            QuerySnapshot papers = firestore.collection(PAPERS_COLLECTION)
+                    .whereEqualTo("studentId", studentId).get().get();
+            List<String> paperIds = papers.getDocuments().stream()
+                    .map(DocumentSnapshot::getId).collect(Collectors.toList());
+
+            if (paperIds.isEmpty()) {
+                return AnalysisDTOs.ProgressResponse.builder()
+                        .studentId(studentId)
+                        .studentName(studentSnap.getString("name"))
+                        .build();
+            }
+
+            List<AnalysisReport> reportList = runBatchedWhereInQuery(
+                    firestore.collection(REPORTS_COLLECTION), "paperId", paperIds, AnalysisReport.class);
+
+            reportList.sort((r1, r2) -> {
+                if (r1.getCreatedAt() == null || r2.getCreatedAt() == null) return 0;
+                return r2.getCreatedAt().compareTo(r1.getCreatedAt());
+            });
+
+            List<AnalysisDTOs.AnalysisReportResponse> responses = reportList.stream()
+                    .map(this::toReportResponse).collect(Collectors.toList());
+
+            return AnalysisDTOs.ProgressResponse.builder()
+                    .studentId(studentId)
+                    .studentName(studentSnap.getString("name"))
+                    .reports(responses)
+                    .trend(calculateTrend(reportList))
+                    .build();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new RuntimeException("Firestore error fetching student progress", e);
         }
     }
 

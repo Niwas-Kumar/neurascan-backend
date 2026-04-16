@@ -40,6 +40,10 @@ public class JwtUtil {
     }
 
     public String generateToken(String email, String role, String userId, String name, String picture) {
+        return generateToken(email, role, userId, name, picture, null);
+    }
+
+    public String generateToken(String email, String role, String userId, String name, String picture, String schoolId) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("role", role);
         claims.put("userId", userId);
@@ -48,6 +52,9 @@ public class JwtUtil {
         }
         if (picture != null) {
             claims.put("picture", picture);
+        }
+        if (schoolId != null) {
+            claims.put("schoolId", schoolId);
         }
         return buildToken(claims, email, jwtExpiration);
     }
@@ -100,8 +107,9 @@ public class JwtUtil {
             String userId = claims.get("userId", String.class);
             String name = claims.get("name", String.class);
             String picture = claims.get("picture", String.class);
+            String schoolId = claims.get("schoolId", String.class);
 
-            return generateToken(email, role, userId, name, picture);
+            return generateToken(email, role, userId, name, picture, schoolId);
         } catch (Exception e) {
             log.error("Failed to refresh token: {}", e.getMessage());
             return null;
@@ -123,6 +131,10 @@ public class JwtUtil {
     public String extractUserId(String token) {
         Object userId = extractClaim(token, claims -> claims.get("userId"));
         return userId != null ? userId.toString() : null;
+    }
+
+    public String extractSchoolId(String token) {
+        return extractClaim(token, claims -> claims.get("schoolId", String.class));
     }
 
     private Date extractExpiration(String token) {

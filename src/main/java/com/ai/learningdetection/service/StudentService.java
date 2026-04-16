@@ -55,18 +55,42 @@ public class StudentService {
             log.info("🔍 [STUDENTS_START] Getting students for teacherId: {}", teacherId);
             
             // CRITICAL FIX: Use single-field query (no composite index required)
-            // This avoids Firestore index delays that cause zero results
             Query query = firestore.collection(STUDENTS_COLLECTION)
                     .whereEqualTo("teacherId", teacherId);
-            log.debug("✅ [STUDENTS_QUERY_BUILT] Base query constructed (single-field query to avoid index delays)");
 
-            // Step 2: Execute query (no composite index needed for single field)
+            return executeStudentQuery(query, search, className, tag, rollNumber, startTime, "teacher=" + teacherId);
+        } catch (InterruptedException | ExecutionException e) {
+            log.error("❌ [STUDENTS_ERROR] Firestore error fetching students for teacher: {}", teacherId, e);
+            throw new RuntimeException("Firestore error fetching students", e);
+        }
+    }
+
+    // -------------------------------------------------------
+    // Get all students in a school (multi-tenant school-wide view)
+    // -------------------------------------------------------
+    public List<StudentDTOs.StudentResponse> getStudentsBySchool(String schoolId, String search, String className, String tag, String rollNumber) {
+        try {
+            long startTime = System.currentTimeMillis();
+            log.info("🔍 [STUDENTS_SCHOOL_START] Getting students for schoolId: {}", schoolId);
+            
+            Query query = firestore.collection(STUDENTS_COLLECTION)
+                    .whereEqualTo("schoolId", schoolId);
+
+            return executeStudentQuery(query, search, className, tag, rollNumber, startTime, "school=" + schoolId);
+        } catch (InterruptedException | ExecutionException e) {
+            log.error("❌ [STUDENTS_ERROR] Firestore error fetching students for school: {}", schoolId, e);
+            throw new RuntimeException("Firestore error fetching students", e);
+        }
+    }
+
+    private List<StudentDTOs.StudentResponse> executeStudentQuery(Query query, String search, String className, String tag, String rollNumber, long startTime, String context) throws InterruptedException, ExecutionException {
+            // Step 2: Execute query
             long queryExecuteStart = System.currentTimeMillis();
             QuerySnapshot querySnapshot = query.get().get();
             long queryExecuteTime = System.currentTimeMillis() - queryExecuteStart;
-            log.info("✅ [STUDENTS_QUERY_RESULT] Query executed in {}ms, found {} total documents for teacher", queryExecuteTime, querySnapshot.size());
+            log.info("✅ [STUDENTS_QUERY_RESULT] Query executed in {}ms, found {} total documents for {}", queryExecuteTime, querySnapshot.size(), context);
             
-            // Step 3: Convert to objects and filter in-memory (CRITICAL FIX: Filter by isActive in code, not Firestore)
+            // Step 3: Convert to objects and filter in-memory
             List<Student> students = querySnapshot.getDocuments().stream()
                     .map(doc -> {
                         Student s = doc.toObject(Student.class);
@@ -74,7 +98,7 @@ public class StudentService {
                             s.getId(), s.getName(), s.getTeacherId(), s.isActive());
                         return s;
                     })
-                    .filter(s -> s.isActive()) // CRITICAL: Filter isActive in memory to avoid composite index
+                    .filter(s -> s.isActive())
                     .filter(s -> className == null || className.isBlank() || s.getClassName().equals(className))
                     .filter(s -> rollNumber == null || rollNumber.isBlank() || s.getRollNumber().equals(rollNumber))
                     .collect(Collectors.toList());
@@ -82,17 +106,14 @@ public class StudentService {
             log.info("✅ [STUDENTS_CONVERTED] Converted {} docs to Student objects, {} active after filtering", querySnapshot.size(), students.size());
             
             if (students.isEmpty()) {
-                log.warn("⚠️  [STUDENTS_EMPTY] No active students found for teacher: {} (filters: class={}, roll={})", 
-                    teacherId, className, rollNumber);
+                log.warn("⚠️  [STUDENTS_EMPTY] No active students found for {} (filters: class={}, roll={})", 
+                    context, className, rollNumber);
                 return new ArrayList<>();
             }
 
             // Step 4: Batch fetch metadata
-            log.debug("✅ [STUDENTS_FETCH_METADATA] Fetching teacher names and paper counts...");
             Map<String, String> teacherNameCache = batchFetchTeacherNames(students);
             Map<String, Integer> paperCountCache = batchCountPapers(students);
-            log.debug("✅ [STUDENTS_METADATA_CACHED] Cached {} teacher names and {} paper counts", 
-                teacherNameCache.size(), paperCountCache.size());
 
             // Step 5: Build responses
             List<StudentDTOs.StudentResponse> responses = students.stream()
@@ -111,14 +132,9 @@ public class StudentService {
                     })
                     .collect(Collectors.toList());
             
-            log.debug("✅ [STUDENTS_FILTERED] After search/tag filters: {} students", responses.size());
             long queryTime = System.currentTimeMillis() - startTime;
-            log.info("✅ [STUDENTS_COMPLETE] getStudentsByTeacher complete: {} students returned in {}ms", responses.size(), queryTime);
+            log.info("✅ [STUDENTS_COMPLETE] Query complete: {} students returned in {}ms for {}", responses.size(), queryTime, context);
             return responses;
-        } catch (InterruptedException | ExecutionException e) {
-            log.error("❌ [STUDENTS_ERROR] Firestore error fetching students for teacher: {}", teacherId, e);
-            throw new RuntimeException("Firestore error fetching students", e);
-        }
     }
 
     // -------------------------------------------------------

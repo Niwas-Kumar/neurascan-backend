@@ -65,6 +65,11 @@ public class SecurityConfig {
                 .requestMatchers("/api/quizzes/public/**", "/quizzes/public/**").permitAll()
                 .requestMatchers("/api/quiz-attempt/**", "/quiz-attempt/**").permitAll()
 
+                // Stripe webhook (verified by signature, not JWT)
+                .requestMatchers("/api/billing/webhook", "/billing/webhook").permitAll()
+                // Public billing plans
+                .requestMatchers("/api/billing/plans", "/billing/plans").permitAll()
+
                 // Student management — TEACHER only
                 .requestMatchers(HttpMethod.GET,    "/api/students/**", "/students/**").hasRole("TEACHER")
                 .requestMatchers(HttpMethod.POST,   "/api/students/**", "/students/**").hasRole("TEACHER")

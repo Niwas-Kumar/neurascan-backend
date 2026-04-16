@@ -53,15 +53,17 @@ public class AuthService {
 
             // Validate school code if provided
             String verificationStatus = "PENDING";
-            String schoolId = request.getSchool();
+            String schoolId = null;
+            String schoolName = request.getSchool();
             String schoolCode = request.getSchoolCode();
 
             if (schoolCode != null && !schoolCode.trim().isEmpty()) {
                 School school = schoolService.validateSchoolCode(schoolCode.trim());
                 if (school != null) {
-                    schoolId = school.getName();
+                    schoolId = school.getId();
+                    schoolName = school.getName();
                     verificationStatus = "APPROVED";
-                    log.info("✓ Valid school code provided. Teacher auto-approved for school: {}", school.getName());
+                    log.info("✓ Valid school code provided. Teacher auto-approved for school: {} (id={})", school.getName(), school.getId());
                 } else {
                     log.warn("⚠️ Invalid school code provided: {}", schoolCode);
                     // Still allow registration but with PENDING status
@@ -95,6 +97,8 @@ public class AuthService {
                     .userName(teacher.getName())
                     .picture(teacher.getPicture())
                     .message(message)
+                    .schoolId(schoolId)
+                    .schoolName(schoolName)
                     .build();
         } catch (EmailAlreadyExistsException | BadCredentialsException e) {
             throw e;
@@ -130,7 +134,7 @@ public class AuthService {
                 throw new BadCredentialsException("Your teacher account has been rejected. Please contact support.");
             }
 
-            String token = jwtUtil.generateToken(teacher.getEmail(), "ROLE_TEACHER", teacher.getId(), teacher.getName(), teacher.getPicture());
+            String token = jwtUtil.generateToken(teacher.getEmail(), "ROLE_TEACHER", teacher.getId(), teacher.getName(), teacher.getPicture(), teacher.getSchoolId());
             log.info("Teacher logged in from Firestore: {} (status: {})", teacher.getEmail(), status);
 
             String message = "PENDING".equals(status)
@@ -145,6 +149,7 @@ public class AuthService {
                     .userEmail(teacher.getEmail())
                     .picture(teacher.getPicture())
                     .message(message)
+                    .schoolId(teacher.getSchoolId())
                     .build();
         } catch (InterruptedException | ExecutionException e) {
             throw new RuntimeException("Firestore error during login", e);

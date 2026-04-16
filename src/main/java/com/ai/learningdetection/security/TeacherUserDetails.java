@@ -19,6 +19,8 @@ public class TeacherUserDetails implements UserDetails, IdentifiablePrincipal {
     private final String name;
     @Getter
     private final String verificationStatus;
+    @Getter
+    private final String schoolId;
     private final Collection<? extends GrantedAuthority> authorities;
 
     public TeacherUserDetails(Teacher teacher) {
@@ -27,6 +29,7 @@ public class TeacherUserDetails implements UserDetails, IdentifiablePrincipal {
         this.password    = teacher.getPassword();
         this.name        = teacher.getName();
         this.verificationStatus = teacher.getVerificationStatus() != null ? teacher.getVerificationStatus() : "APPROVED";
+        this.schoolId    = teacher.getSchoolId();
         this.authorities = List.of(new SimpleGrantedAuthority("ROLE_TEACHER"));
     }
 

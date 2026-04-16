@@ -26,6 +26,7 @@ public class ParentStudentService {
     private final Firestore firestore;
     private final OTPService otpService;
     private final EmailService emailService;
+    private final NotificationService notificationService;
 
     private static final String RELATIONSHIPS_COLLECTION = "parent_student_relationships";
     private static final String STUDENTS_COLLECTION = "students";
@@ -274,6 +275,22 @@ public class ParentStudentService {
 
             log.info("Verified connection {} for parent {} -> student {}",
                     request.getRelationshipId(), parentId, relationship.getStudentId());
+
+            // Notify teacher about new parent link
+            try {
+                DocumentSnapshot studentDoc = firestore.collection(STUDENTS_COLLECTION)
+                        .document(relationship.getStudentId()).get().get();
+                if (studentDoc.exists()) {
+                    String teacherId = studentDoc.getString("teacherId");
+                    DocumentSnapshot parentDoc = firestore.collection(PARENTS_COLLECTION).document(parentId).get().get();
+                    String parentName = parentDoc.exists() ? parentDoc.getString("name") : "A parent";
+                    if (teacherId != null) {
+                        notificationService.notifyStudentLinked(teacherId, parentName != null ? parentName : "A parent", relationship.getStudentName());
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("Failed to send parent-linked notification: {}", e.getMessage());
+            }
 
             return ConnectionResultResponse.builder()
                     .success(true)

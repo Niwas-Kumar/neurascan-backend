@@ -106,6 +106,8 @@ public class AuthDTOs {
         private String userEmail;
         private String picture;
         private String message;
+        private String schoolId;
+        private String schoolName;
     }
 }
 
