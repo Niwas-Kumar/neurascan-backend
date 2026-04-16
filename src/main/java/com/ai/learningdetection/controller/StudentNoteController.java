@@ -14,7 +14,7 @@ import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
 @RestController
-@RequestMapping("/api/notes")
+@RequestMapping({"/api/notes", "/notes"})
 @RequiredArgsConstructor
 public class StudentNoteController {
 

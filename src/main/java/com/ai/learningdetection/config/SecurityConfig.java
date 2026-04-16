@@ -101,6 +101,11 @@ public class SecurityConfig {
                 // Parent-student connection management — PARENT only
                 .requestMatchers("/api/parent/students/**", "/parent/students/**").hasRole("PARENT")
 
+                // Notes — parent can read notes visible to them
+                .requestMatchers(HttpMethod.GET, "/api/notes/parent/**", "/notes/parent/**").hasRole("PARENT")
+                // Notes — teacher CRUD
+                .requestMatchers("/api/notes/**", "/notes/**").hasRole("TEACHER")
+
                 // Everything else requires authentication
                 .anyRequest().authenticated()
             )
