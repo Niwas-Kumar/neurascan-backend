@@ -54,6 +54,13 @@ public class SecurityConfig {
                 // Public auth endpoints
                 .requestMatchers("/api/auth/**", "/auth/**").permitAll()
 
+                // Admin login is public; school code validation is public for registration
+                .requestMatchers("/api/admin/login", "/admin/login").permitAll()
+                .requestMatchers("/api/admin/schools/validate-code", "/admin/schools/validate-code").permitAll()
+
+                // Admin panel — ADMIN only
+                .requestMatchers("/api/admin/**", "/admin/**").hasRole("ADMIN")
+
                 // Public quiz attempt endpoints (accessed via email link token)
                 .requestMatchers("/api/quizzes/public/**", "/quizzes/public/**").permitAll()
                 .requestMatchers("/api/quiz-attempt/**", "/quiz-attempt/**").permitAll()
@@ -68,6 +75,10 @@ public class SecurityConfig {
                 .requestMatchers("/api/analysis/upload", "/analysis/upload").hasRole("TEACHER")
                 .requestMatchers("/api/analysis/reports", "/analysis/reports").hasRole("TEACHER")
                 .requestMatchers("/api/analysis/dashboard", "/analysis/dashboard").hasRole("TEACHER")
+
+                // Parent self-serve analysis — PARENT can also upload and get reports
+                .requestMatchers("/api/analysis/parent-upload", "/analysis/parent-upload").hasRole("PARENT")
+                .requestMatchers("/api/analysis/parent-reports", "/analysis/parent-reports").hasRole("PARENT")
 
                 // Parent quiz access - MUST be before the general /api/quizzes/** rule
                 .requestMatchers("/api/quizzes/student/*/responses", "/quizzes/student/*/responses").hasAnyRole("PARENT", "TEACHER")

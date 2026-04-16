@@ -23,6 +23,11 @@ public class Teacher {
     @Builder.Default
     private boolean emailVerified = false;  // Default value for new teachers
 
+    // Teacher verification status: APPROVED, PENDING, REJECTED
+    // Existing teachers without this field default to APPROVED for backward compatibility
+    @Builder.Default
+    private String verificationStatus = "APPROVED";
+
     // Legacy Firestore compatibility: some old documents still use `school`.
     public void setSchool(String school) {
         if ((this.schoolId == null || this.schoolId.isBlank()) && school != null && !school.isBlank()) {

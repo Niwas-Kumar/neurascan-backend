@@ -65,6 +65,17 @@ public class EmailService {
     }
 
     /**
+     * Send teacher approval/rejection notification email
+     */
+    public boolean sendTeacherApprovalEmail(String toEmail, String teacherName, boolean approved, String reason) {
+        String subject = approved
+                ? "🧠 NeuraScan — Your Teacher Account is Approved!"
+                : "🧠 NeuraScan — Teacher Account Update";
+        String htmlContent = generateTeacherApprovalHtml(teacherName, approved, reason);
+        return sendEmail(toEmail, subject, htmlContent);
+    }
+
+    /**
      * Generic email send method
      */
     private boolean sendEmail(String toEmail, String subject, String htmlContent) {
@@ -334,5 +345,29 @@ public class EmailService {
             "  </div>\n" +
             "</div>\n" +
             "</body></html>";
+    }
+
+    /**
+     * Generate teacher approval/rejection email HTML
+     */
+    private String generateTeacherApprovalHtml(String teacherName, boolean approved, String reason) {
+        String statusText = approved ? "Approved" : "Not Approved";
+        String statusColor = approved ? "#1e8e3e" : "#d93025";
+        String message = approved
+                ? "Your teacher account has been verified and approved. You now have full access to all teacher features including creating quizzes, managing students, and uploading test papers for analysis."
+                : "Unfortunately, your teacher account could not be verified at this time." + (reason != null ? " Reason: " + reason : "") + " If you believe this is an error, please contact our support team.";
+
+        return "<!DOCTYPE html><html><head><meta charset='UTF-8'>" +
+                "<style>body{margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;}" +
+                ".container{max-width:500px;margin:0 auto;padding:40px 20px;}" +
+                ".card{background:#fff;border-radius:12px;padding:32px;box-shadow:0 2px 12px rgba(0,0,0,0.08);}" +
+                ".status{display:inline-block;padding:6px 16px;border-radius:20px;font-weight:600;font-size:14px;color:#fff;background:" + statusColor + ";}" +
+                ".footer{margin-top:32px;text-align:center;font-size:12px;color:#80868b;}" +
+                "</style></head><body><div class='container'><div class='card'>" +
+                "<h2 style='margin:0 0 16px;color:#202124;'>Hello " + teacherName + ",</h2>" +
+                "<p style='margin:0 0 16px;'><span class='status'>" + statusText + "</span></p>" +
+                "<p style='color:#5f6368;line-height:1.6;'>" + message + "</p>" +
+                (approved ? "<p style='margin-top:20px;'><a href='https://neurascan.vercel.app/login' style='display:inline-block;padding:12px 24px;background:#14B8A6;color:#fff;text-decoration:none;border-radius:8px;font-weight:600;'>Sign In Now</a></p>" : "") +
+                "</div><div class='footer'><p>© 2026 NeuraScan. AI-Powered Learning Disability Detection.</p></div></div></body></html>";
     }
 }

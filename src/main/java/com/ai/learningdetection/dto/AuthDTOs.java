@@ -24,8 +24,8 @@ public class AuthDTOs {
         @Size(min = 6, message = "Password must be at least 6 characters")
         private String password;
 
-        @NotBlank(message = "School name is required")
-        private String school;
+        private String school;       // School name (optional free-text)
+        private String schoolCode;   // School verification code (optional)
 
         @NotBlank(message = "OTP verification code is required")
         private String otp;

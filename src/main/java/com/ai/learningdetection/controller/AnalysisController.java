@@ -136,4 +136,46 @@ public class AnalysisController {
                 ApiResponse.success(report, "Comprehensive report retrieved successfully"));
     }
 
+    // ============================================================
+    // PARENT SELF-SERVE ANALYSIS (Independent users)
+    // ============================================================
+
+    /**
+     * POST /api/analysis/parent-upload
+     * Parent uploads their child's test paper for AI analysis.
+     * The parent must have a linked student to upload for.
+     */
+    @PostMapping(value = "/parent-upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasRole('PARENT')")
+    public ResponseEntity<ApiResponse<AnalysisDTOs.UploadResponse>> parentUploadAndAnalyze(
+            @RequestParam("studentId") String studentId,
+            @RequestParam("file") MultipartFile file,
+            @AuthenticationPrincipal IdentifiablePrincipal principal) {
+
+        // Parent uses the same analysis pipeline, but we pass the parent's ID as the "teacher"
+        // This allows independent parents to get AI analysis for their own child
+        AnalysisDTOs.UploadResponse result =
+                analysisService.uploadAndAnalyze(studentId, file, principal.getId());
+
+        return ResponseEntity.ok(
+                ApiResponse.success(result, "File uploaded and analyzed successfully"));
+    }
+
+    /**
+     * GET /api/analysis/parent-reports
+     * Parent retrieves all analysis reports they have uploaded.
+     */
+    @GetMapping("/parent-reports")
+    @PreAuthorize("hasRole('PARENT')")
+    public ResponseEntity<ApiResponse<List<AnalysisDTOs.AnalysisReportResponse>>> getParentReports(
+            @AuthenticationPrincipal IdentifiablePrincipal principal) {
+
+        // Reuse teacher report logic — it fetches by the uploader's ID
+        List<AnalysisDTOs.AnalysisReportResponse> reports =
+                analysisService.getReportsByTeacher(principal.getId());
+
+        return ResponseEntity.ok(
+                ApiResponse.success(reports, "Reports retrieved successfully"));
+    }
+
 }

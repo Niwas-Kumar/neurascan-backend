@@ -1,6 +1,6 @@
 package com.ai.learningdetection.security;
 
-import com.ai.learningdetection.entity.Teacher;
+import com.ai.learningdetection.entity.Admin;
 import lombok.Getter;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -9,7 +9,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import java.util.Collection;
 import java.util.List;
 
-public class TeacherUserDetails implements UserDetails, IdentifiablePrincipal {
+public class AdminUserDetails implements UserDetails, IdentifiablePrincipal {
 
     @Getter
     private final String id;
@@ -17,19 +17,15 @@ public class TeacherUserDetails implements UserDetails, IdentifiablePrincipal {
     private final String password;
     @Getter
     private final String name;
-    @Getter
-    private final String verificationStatus;
     private final Collection<? extends GrantedAuthority> authorities;
 
-    public TeacherUserDetails(Teacher teacher) {
-        this.id          = teacher.getId();
-        this.email       = teacher.getEmail();
-        this.password    = teacher.getPassword();
-        this.name        = teacher.getName();
-        this.verificationStatus = teacher.getVerificationStatus() != null ? teacher.getVerificationStatus() : "APPROVED";
-        this.authorities = List.of(new SimpleGrantedAuthority("ROLE_TEACHER"));
+    public AdminUserDetails(Admin admin) {
+        this.id          = admin.getId();
+        this.email       = admin.getEmail();
+        this.password    = admin.getPassword();
+        this.name        = admin.getName();
+        this.authorities = List.of(new SimpleGrantedAuthority("ROLE_ADMIN"));
     }
-
 
     @Override public Collection<? extends GrantedAuthority> getAuthorities() { return authorities; }
     @Override public String getPassword()   { return password; }

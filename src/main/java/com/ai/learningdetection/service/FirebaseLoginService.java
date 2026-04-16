@@ -107,7 +107,17 @@ public class FirebaseLoginService {
                 }
                 long totalTime = System.currentTimeMillis() - loginStartTime;
                 log.info("Google Login: Teacher login completed in {}ms", totalTime);
-                return createResponse(t.getEmail(), "ROLE_TEACHER", t.getId(), t.getName(), t.getPicture());
+
+                // Check verification status for existing teachers
+                String status = t.getVerificationStatus() != null ? t.getVerificationStatus() : "APPROVED";
+                if ("REJECTED".equals(status)) {
+                    throw new BadCredentialsException("Your teacher account has been rejected. Please contact support.");
+                }
+                AuthDTOs.AuthResponse resp = createResponse(t.getEmail(), "ROLE_TEACHER", t.getId(), t.getName(), t.getPicture());
+                if ("PENDING".equals(status)) {
+                    resp.setMessage("ACCOUNT_PENDING_APPROVAL");
+                }
+                return resp;
             }
 
             // Check parent
@@ -160,14 +170,17 @@ public class FirebaseLoginService {
                         .schoolId("")
                         .picture(picture)
                         .emailVerified(true)
+                        .verificationStatus("PENDING")  // New Google teachers need admin approval
                         .createdAt(java.time.Instant.now().toString())
                         .updatedAt(java.time.Instant.now().toString())
                         .build();
                 docRef.set(t).get();
                 upsertUserProfile(decodedToken.getUid(), email, name, "ROLE_TEACHER", t.getSchoolId());
                 long totalTime = System.currentTimeMillis() - loginStartTime;
-                log.info("Google Login: New teacher created with ID: {} (total: {}ms)", t.getId(), totalTime);
-                return createResponse(t.getEmail(), "ROLE_TEACHER", t.getId(), t.getName(), t.getPicture());
+                log.info("Google Login: New teacher created with ID: {} (status: PENDING, total: {}ms)", t.getId(), totalTime);
+                AuthDTOs.AuthResponse response = createResponse(t.getEmail(), "ROLE_TEACHER", t.getId(), t.getName(), t.getPicture());
+                response.setMessage("ACCOUNT_PENDING_APPROVAL");
+                return response;
             }
 
         } catch (InterruptedException | ExecutionException e) {

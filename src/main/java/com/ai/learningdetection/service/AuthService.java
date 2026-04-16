@@ -2,6 +2,7 @@ package com.ai.learningdetection.service;
 
 import com.ai.learningdetection.dto.AuthDTOs;
 import com.ai.learningdetection.entity.Parent;
+import com.ai.learningdetection.entity.School;
 import com.ai.learningdetection.entity.Teacher;
 import com.ai.learningdetection.exception.EmailAlreadyExistsException;
 import com.ai.learningdetection.util.JwtUtil;
@@ -12,6 +13,7 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
 import java.util.concurrent.ExecutionException;
 
 @Service
@@ -23,6 +25,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
     private final OTPService otpService;
+    private final SchoolService schoolService;
 
     private static final String TEACHERS_COLLECTION = "teachers";
     private static final String PARENTS_COLLECTION = "parents";
@@ -48,26 +51,50 @@ public class AuthService {
             }
             otpService.consumeOTP(request.getEmail(), request.getOtp());
 
+            // Validate school code if provided
+            String verificationStatus = "PENDING";
+            String schoolId = request.getSchool();
+            String schoolCode = request.getSchoolCode();
+
+            if (schoolCode != null && !schoolCode.trim().isEmpty()) {
+                School school = schoolService.validateSchoolCode(schoolCode.trim());
+                if (school != null) {
+                    schoolId = school.getName();
+                    verificationStatus = "APPROVED";
+                    log.info("✓ Valid school code provided. Teacher auto-approved for school: {}", school.getName());
+                } else {
+                    log.warn("⚠️ Invalid school code provided: {}", schoolCode);
+                    // Still allow registration but with PENDING status
+                }
+            }
+
             DocumentReference docRef = firestore.collection(TEACHERS_COLLECTION).document();
             Teacher teacher = Teacher.builder()
                     .id(docRef.getId())
                     .name(request.getName())
                     .email(request.getEmail())
                     .password(passwordEncoder.encode(request.getPassword()))
-                    .schoolId(request.getSchool())  // ✅ Map from 'school' request field to 'schoolId' entity field
+                    .schoolId(schoolId)
                     .emailVerified(true)
+                    .verificationStatus(verificationStatus)
+                    .createdAt(Instant.now().toString())
+                    .updatedAt(Instant.now().toString())
                     .build();
 
             docRef.set(teacher).get();
-            log.info("✓ Successfully registered new teacher in Firestore: {} ({})", teacher.getName(), teacher.getEmail());
+            log.info("✓ Registered teacher: {} ({}) — status: {}", teacher.getName(), teacher.getEmail(), verificationStatus);
+
+            String message = verificationStatus.equals("APPROVED")
+                    ? "Registration successful! Your account is verified."
+                    : "Registration successful! Your account is pending admin approval.";
 
             return AuthDTOs.AuthResponse.builder()
-                    .jwtToken(null) // Can generate token if auto-login is desired
+                    .jwtToken(null)
                     .userRole("ROLE_TEACHER")
                     .userId(teacher.getId())
                     .userName(teacher.getName())
                     .picture(teacher.getPicture())
-                    .message("Registration successful!")
+                    .message(message)
                     .build();
         } catch (EmailAlreadyExistsException | BadCredentialsException e) {
             throw e;
@@ -97,8 +124,18 @@ public class AuthService {
                 throw new BadCredentialsException("Invalid email or password.");
             }
 
+            // Check teacher verification status
+            String status = teacher.getVerificationStatus() != null ? teacher.getVerificationStatus() : "APPROVED";
+            if ("REJECTED".equals(status)) {
+                throw new BadCredentialsException("Your teacher account has been rejected. Please contact support.");
+            }
+
             String token = jwtUtil.generateToken(teacher.getEmail(), "ROLE_TEACHER", teacher.getId(), teacher.getName(), teacher.getPicture());
-            log.info("Teacher logged in from Firestore: {}", teacher.getEmail());
+            log.info("Teacher logged in from Firestore: {} (status: {})", teacher.getEmail(), status);
+
+            String message = "PENDING".equals(status)
+                    ? "ACCOUNT_PENDING_APPROVAL"
+                    : "Login successful";
 
             return AuthDTOs.AuthResponse.builder()
                     .jwtToken(token)
@@ -107,7 +144,7 @@ public class AuthService {
                     .userName(teacher.getName())
                     .userEmail(teacher.getEmail())
                     .picture(teacher.getPicture())
-                    .message("Login successful")
+                    .message(message)
                     .build();
         } catch (InterruptedException | ExecutionException e) {
             throw new RuntimeException("Firestore error during login", e);
